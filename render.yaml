@@ -1,0 +1,64 @@
+# ============================================================================
+# render.yaml — Render Infrastructure-as-Code Blueprint
+# ============================================================================
+# Deploy with one click: https://render.com/deploy
+# This creates both the PostgreSQL database and the FastAPI web service.
+# ============================================================================
+
+databases:
+  # --------------------------------------------------------------------------
+  # Managed PostgreSQL Database (persistent, backed up by Render)
+  # --------------------------------------------------------------------------
+  - name: expense-manager-db
+    plan: free                          # free | starter | standard | pro
+    databaseName: expense_manager
+    user: expense_admin
+    region: oregon                      # or singapore, frankfurt, ohio
+    postgresMajorVersion: "15"
+    ipAllowList: []                     # empty = allow all (Render internal)
+
+services:
+  # --------------------------------------------------------------------------
+  # FastAPI Web Service
+  # --------------------------------------------------------------------------
+  - type: web
+    name: expense-manager-api
+    runtime: docker
+    plan: free                          # free | starter | standard | pro
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Render auto-injects DATABASE_URL when you link a database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: expense-manager-db
+          property: connectionString
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: expense-manager-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: expense-manager-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: expense-manager-db
+          property: database
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: expense-manager-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: expense-manager-db
+          property: port
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - app/**
+        - schema/**
+        - requirements.txt
+        - Dockerfile

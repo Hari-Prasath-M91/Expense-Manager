@@ -2,7 +2,8 @@
 # render.yaml — Render Infrastructure-as-Code Blueprint
 # ============================================================================
 # Deploy with one click: https://render.com/deploy
-# This creates both the PostgreSQL database and the FastAPI web service.
+# This creates both the PostgreSQL database and the FastAPI web service
+# that serves the API + frontend from a single container.
 # ============================================================================
 
 databases:
@@ -19,7 +20,7 @@ databases:
 
 services:
   # --------------------------------------------------------------------------
-  # FastAPI Web Service
+  # FastAPI Web Service — serves API + Frontend (single container)
   # --------------------------------------------------------------------------
   - type: web
     name: expense-manager-api
@@ -55,10 +56,13 @@ services:
           property: port
       - key: PORT
         value: "10000"
+      - key: CEREBRAS_API_KEY
+        sync: false  # Set manually in Render dashboard
     healthCheckPath: /health
     buildFilter:
       paths:
         - app/**
         - schema/**
+        - frontend/**
         - requirements.txt
         - Dockerfile

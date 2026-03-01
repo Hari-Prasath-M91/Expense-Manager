@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description"
+        content="Personal Expense Manager - Track Smart, Save Better. AI-powered expense tracking with budget planning and analytics.">
+    <meta name="theme-color" content="#b1cca1">
+    <title>Expense Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script>
+        // When served from FastAPI, assets are at /_assets/
+        // When served locally (npx serve), assets are relative
+        window.__assetBase = (window.location.port === '3000' || window.location.protocol === 'file:') ? '' : '/_assets/';
+        document.write('<link rel="stylesheet" href="' + window.__assetBase + 'styles.css">');
+    </script>
+</head>
+
+<body>
+    <div id="app" class="app-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = window.__assetBase + src;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.body.appendChild(s);
+            });
+        }
+        (async () => {
+            for (const f of ['api.js', 'store.js', 'router.js', 'components.js', 'app.js']) {
+                await loadScript(f);
+            }
+        })();
+    </script>
+</body>
+
+</html>

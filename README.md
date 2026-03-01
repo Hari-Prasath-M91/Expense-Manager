@@ -1,49 +1,43 @@
-# 💰 AI-Powered Personal Expense Manager — Database API
+# 💰 AI-Powered Personal Expense Manager
 
-A PostgreSQL database schema + FastAPI REST endpoint layer for the AI-Powered Personal Expense Manager. Designed for deployment on **Render**.
+A minimalist, AI-driven expense management system built with **FastAPI** and **Vanilla JS**. It features an interactive chatbot powered by **Cerebras** for financial insights and automated transaction recording.
 
-## 🚀 Deploy to Render
+## 🚀 Key Features
 
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → **New** → **Blueprint**
-3. Connect your GitHub repo — Render auto-detects `render.yaml`
-4. Once deployed, initialize the schema:
+- **Interactive Dashboard**: Modern, glassmorphic UI with real-time spending charts.
+- **AI Chatbot**: powered by Cerebras (llama-3.3-70b). Ask about your spending, get tips, or log expenses by typing "I spent 500 on coffee".
+- **Advanced Tracking**: Group transactions by date, filter by category, and manage monthly budgets.
+- **Invoice Processing**: interactive upload zone for processing digital receipts.
+- **Dark Mode**: Smooth transitions between Light and Dark themes.
 
-```bash
-curl -X POST https://your-app.onrender.com/schema/initialize
-```
-
-## 📡 API Endpoints
+## 📡 API Layer
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/` | Swagger UI (interactive docs) |
-| `GET` | `/health` | Health check |
-| `GET` | `/info` | System info & DB status |
-| `GET` | `/stats` | Database statistics |
-| `POST` | `/schema/initialize` | Apply schema to database |
-| `GET` | `/schema/tables` | List all tables |
-| `GET` | `/schema/tables/{name}` | Describe table columns |
-| `POST` | `/query` | Execute read-only SQL |
-| `POST` | `/execute` | Execute write SQL |
-| `POST` | `/users` | Create user |
-| `GET` | `/users` | List users |
-| `POST` | `/expenses` | Create expense |
-| `GET` | `/expenses` | List/filter expenses |
-| `GET` | `/analytics/summary/{user_id}` | Spending analytics |
-| `GET` | `/analytics/top-vendors/{user_id}` | Top vendors |
-| `POST` | `/budgets` | Create budget |
-| `GET` | `/categories` | List categories |
+| `GET`  | `/`      | Serve Frontend |
+| `GET`  | `/docs`  | Interactive Swagger Documentation |
+| `POST` | `/chatbot`| AI financial assistant endpoint |
+| `POST` | `/expenses`| Create a new transaction |
+| `GET`  | `/expenses`| List and filter transactions |
+| `GET`  | `/analytics/summary/{uid}` | Aggregate spending data |
+| `POST` | `/schema/init` | Setup database schema |
 
-## 🛠️ Local Development
+## 🛠️ Setup & Deployment
 
-```bash
-docker build -t expense-manager-api .
-docker run -p 10000:10000 -e DATABASE_URL=postgresql://user:pass@host:5432/dbname expense-manager-api
-```
+1. **Environment Variables**: Create a `.env` file with:
+   ```bash
+   DATABASE_URL=postgresql://user:pass@host:port/dbname
+   CEREBRAS_API_KEY=your_key_here
+   ```
+2. **Installation**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Run Locally**:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 10000 --reload
+   ```
+4. **Initialize DB**: Visit `/docs` and execute the `/schema/init` endpoint.
 
-Then visit `http://localhost:10000` for the Swagger UI.
-
-## 📊 Schema
-
-42 tables across 15 modules — see [`schema/SCHEMA_DOCUMENTATION.md`](schema/SCHEMA_DOCUMENTATION.md) for full details.
+## 📊 Database
+Utilizes a clean PostgreSQL schema with 4 core tables: `users`, `categories`, `expenses`, and `budgets`. See [`schema/SCHEMA_DOCUMENTATION.md`](schema/SCHEMA_DOCUMENTATION.md) for details.

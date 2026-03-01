@@ -7,10 +7,11 @@
 # ============================================================================
 from __future__ import annotations
 
-import os
-from urllib.parse import urlparse
-
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+# Load environment variables from .env file so os.getenv() works locally
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -23,6 +24,7 @@ class Settings(BaseSettings):
 
     # --- Full connection string (Render injects this automatically) ----------
     database_url: str | None = None
+    cerebras_api_key: str | None = None
 
     # --- App ----------------------------------------------------------------
     port: int = 10000

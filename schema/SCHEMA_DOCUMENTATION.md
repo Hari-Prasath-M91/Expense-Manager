@@ -1,57 +1,51 @@
 # Expense Manager — Database Schema
 
 ## Overview
-A minimalist PostgreSQL schema with 4 core tables for high-performance financial tracking and AI-driven insights.
+A high-performance PostgreSQL schema designed for AI-driven financial insights and automated transaction tracking from external sources (like Gmail).
 
-## Core Tables
+## Tables
 
 ### 👤 `users`
 | Column | Type | Description |
 |--------|------|-------------|
-| user_id | UUID | Primary key, default `gen_random_uuid()` |
-| email | VARCHAR(255) | Unique identifier |
-| full_name | VARCHAR(100) | User's display name |
-| password_hash | VARCHAR(255)| Default 'demo' |
-| preferred_currency | VARCHAR(3)| Default 'INR' |
-| avatar | TEXT | URL to user's profile picture |
+| user_id | UUID | Primary key |
+| google_id | VARCHAR(255) | Unique identifier for Google OAuth sessions |
+| email | VARCHAR(255) | Unique user email |
+| preferred_currency | VARCHAR(3)| Default 'INR'. Used for auto-conversion |
+| google_refresh_token | TEXT | Persistent token for long-term Gmail syncing |
 | dark_mode | BOOLEAN | User interface preference |
-| created_at | TIMESTAMPTZ | Automatic timestamp |
 
 ### 🗂️ `categories`
 | Column | Type | Description |
 |--------|------|-------------|
 | category_id | SERIAL | Primary key |
-| name | VARCHAR(50) | Friendly name (e.g., Food, Travel) |
+| name | VARCHAR(50) | Unique name (e.g., Food, Travel) |
 | icon | VARCHAR(10) | Emoji representation |
-| color | VARCHAR(7) | Hex code for UI representation |
-| is_default | BOOLEAN | System-provided categories |
-| created_at | TIMESTAMPTZ | Automatic timestamp |
+| is_default | BOOLEAN | System-provided vs User-defined |
 
 ### 🧾 `expenses`
 | Column | Type | Description |
 |--------|------|-------------|
 | expense_id | UUID | Primary key |
 | user_id | UUID | Foreign Key → `users` |
-| amount | NUMERIC(12,2) | Transaction value |
+| amount | NUMERIC(12,2) | Value (stored with 2 decimal precision) |
 | category_id | INTEGER | Foreign Key → `categories` |
 | expense_date | DATE | Actual date of transaction |
-| created_at | TIMESTAMPTZ | Creation timestamp |
+| gmail_msg_id | VARCHAR(255) | Link to source email (prevents duplicates) |
 
 ### 📅 `budgets`
 | Column | Type | Description |
 |--------|------|-------------|
 | budget_id | SERIAL | Primary key |
 | user_id | UUID | Foreign Key → `users` |
-| category_id | INTEGER | Foreign Key → `categories` |
+| category_id | INTEGER | Linked spending category |
 | amount | NUMERIC(12,2) | Monthly limit |
 | month | VARCHAR(7) | Format: 'YYYY-MM' |
-| created_at | TIMESTAMPTZ | Creation timestamp |
 
-## Relationships
-- One **User** has Many **Expenses** (1:N)
-- One **User** has Many **Budgets** (1:N)
-- One **Category** is linked to Many **Expenses** (1:N)
-- One **Category** is linked to Many **Budgets** (1:N)
-
-## Default Seed Categories
-Seeded with **Food**, **Transport**, **Shopping**, **Bills**, **Entertainment**, and **Others** with curated colors.
+### 📩 `gmail_scanned_ids`
+| Column | Type | Description |
+|--------|------|-------------|
+| scan_id | SERIAL | Primary key |
+| user_id | UUID | Foreign Key → `users` |
+| msg_id | VARCHAR(255) | Gmail message ID that was processed |
+| scanned_at| TIMESTAMPTZ | timestamp of the scan |

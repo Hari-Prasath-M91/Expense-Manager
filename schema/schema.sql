@@ -6,19 +6,21 @@
 -- Users
 CREATE TABLE IF NOT EXISTS users (
     user_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    google_id   VARCHAR(255) UNIQUE,
     email       VARCHAR(255) UNIQUE NOT NULL,
     full_name   VARCHAR(100) NOT NULL,
     password_hash VARCHAR(255) NOT NULL DEFAULT 'demo',
     preferred_currency VARCHAR(3) DEFAULT 'INR',
     avatar      TEXT,
     dark_mode   BOOLEAN DEFAULT FALSE,
+    google_refresh_token TEXT,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Categories (system defaults + user-defined)
 CREATE TABLE IF NOT EXISTS categories (
     category_id SERIAL PRIMARY KEY,
-    name        VARCHAR(50) NOT NULL,
+    name        VARCHAR(50) UNIQUE NOT NULL,
     icon        VARCHAR(10) DEFAULT '📌',
     color       VARCHAR(7) DEFAULT '#D5DBDB',
     is_default  BOOLEAN DEFAULT TRUE,
@@ -32,7 +34,14 @@ CREATE TABLE IF NOT EXISTS expenses (
     amount      NUMERIC(12,2) NOT NULL,
     category_id INTEGER REFERENCES categories(category_id),
     expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    gmail_msg_id VARCHAR(255) UNIQUE,
     created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS gmail_scanned_ids (
+    msg_id     VARCHAR(255) PRIMARY KEY,
+    user_id    UUID NOT NULL REFERENCES users(user_id),
+    scanned_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_expenses_user ON expenses(user_id);

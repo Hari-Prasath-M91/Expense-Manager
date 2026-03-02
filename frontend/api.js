@@ -15,6 +15,7 @@ const API_BASE = (() => {
 })();
 
 const api = {
+    getBaseUrl() { return API_BASE; },
     async _fetch(path, opts = {}) {
         const url = `${API_BASE}${path}`;
         const config = {
@@ -86,5 +87,13 @@ const api = {
             q = '?' + p.toString();
         }
         return this.get(`/analytics/summary/${userId}${q}`);
+    },
+
+    // Gmail Sync
+    previewGmailSync(userId) {
+        return this.get(`/sync/gmail/preview?user_id=${userId}`);
+    },
+    confirmGmailSync(userId, expenses) {
+        return this.post(`/sync/gmail/confirm?user_id=${userId}`, expenses);
     },
 };

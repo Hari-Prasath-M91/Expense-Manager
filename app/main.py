@@ -14,11 +14,17 @@ from typing import Any
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
+import os
+import httpx
 
 from app.database import DatabasePool
+from app.config import settings
+from app.gmail import fetch_gmail_expenses
 
 FRONTEND_DIR = pathlib.Path(__file__).parent.parent / "frontend"
 
@@ -49,6 +55,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+
+# OAuth Setup
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=settings.google_client_id,
+    client_secret=settings.google_client_secret,
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile https://www.googleapis.com/auth/gmail.readonly'}
 )
 
 
@@ -84,8 +101,79 @@ async def init_schema(request: Request):
 
 
 # ===========================================================================
-# Users
+# Auth
 # ===========================================================================
+@app.get("/auth/google", tags=["Auth"])
+async def login_google(request: Request):
+    """Initiate Google OAuth login."""
+    redirect_uri = request.url_for('auth_callback')
+    # If served behind HTTPS (like on Render), ensure redirect_uri uses https
+    if "render.com" in str(redirect_uri) or os.getenv("RENDER"):
+         redirect_uri = str(redirect_uri).replace("http://", "https://")
+    return await oauth.google.authorize_redirect(
+        request, 
+        str(redirect_uri), 
+        access_type='offline', 
+        prompt='consent'
+    )
+
+
+@app.get("/auth/callback", name="auth_callback", tags=["Auth"])
+async def auth_callback(request: Request):
+    """Handle Google OAuth callback."""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception as e:
+        raise HTTPException(400, f"OAuth error: {e}")
+
+    user_info = token.get('userinfo')
+    if not user_info:
+        raise HTTPException(400, "Failed to get user info from Google")
+
+    db = _db(request)
+    # Check if user exists by google_id or email
+    row = await db.fetchrow(
+        "SELECT * FROM users WHERE google_id = $1 OR email = $2",
+        user_info['sub'], user_info['email']
+    )
+
+    if row:
+        # Update existing user (sync name/avatar if needed)
+        updated = await db.fetchrow(
+            """
+            UPDATE users 
+            SET full_name = $1, avatar = $2, google_id = $3
+            WHERE user_id = $4 RETURNING *
+            """,
+            user_info.get('name', row['full_name']),
+            user_info.get('picture', row['avatar']),
+            user_info['sub'],
+            row['user_id']
+        )
+        user_data = dict(updated)
+    else:
+        # Create new user
+        new_user = await db.fetchrow(
+            """
+            INSERT INTO users (google_id, email, full_name, avatar)
+            VALUES ($1, $2, $3, $4) RETURNING *
+            """,
+            user_info['sub'], user_info['email'], 
+            user_info.get('name', 'User'), user_info.get('picture')
+        )
+        user_data = dict(new_user)
+
+    # Save refresh token if provided
+    refresh_token = token.get('refresh_token')
+    if refresh_token:
+        await db.execute(
+            "UPDATE users SET google_refresh_token = $1 WHERE user_id = $2",
+            refresh_token, user_data['user_id']
+        )
+
+    # Redirect to frontend with user_id in hash or query
+    request.session['google_token'] = token
+    return RedirectResponse(url=f"/#login_success?user_id={user_data['user_id']}")
 class UserCreate(BaseModel):
     email: str
     full_name: str
@@ -387,17 +475,158 @@ async def chatbot_endpoint(body: ChatRequest, request: Request):
         return {"reply": "I'm sorry, I'm having trouble thinking clearly right now. Please try again in a bit! 🧠💤"}
 
 
-# ===========================================================================
-# Frontend — Serve at root
-# ===========================================================================
+async def _get_valid_google_token(request: Request, user_id: str) -> str | None:
+    """Helper to get a valid access token, refreshing if necessary."""
+    token_data = request.session.get('google_token')
+    if token_data and 'access_token' in token_data:
+        # Check if already expired (with 10s buffer)
+        expires_at = token_data.get('expires_at', 0)
+        if expires_at > datetime.now().timestamp() + 10:
+            return token_data['access_token']
+
+    # Try to refresh
+    db = _db(request)
+    row = await db.fetchrow("SELECT google_refresh_token FROM users WHERE user_id = $1", uuid.UUID(user_id))
+    if not row or not row['google_refresh_token']:
+        return None
+
+    # Google Token Refresh API
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "refresh_token": row['google_refresh_token'],
+                    "grant_type": "refresh_token",
+                }
+            )
+            if resp.status_code == 200:
+                new_token = resp.json()
+                # Update session
+                curr_token = request.session.get('google_token', {})
+                curr_token.update(new_token)
+                request.session['google_token'] = curr_token
+                return new_token['access_token']
+    except Exception as e:
+        print(f"Token refresh failed: {e}")
+
+    return None
+
+
+@app.get("/sync/gmail/preview", tags=["Gmail"])
+async def preview_gmail_sync(request: Request, user_id: str):
+    """Fetch potential expenses from Gmail (preview only)."""
+    db = _db(request)
+    uid = uuid.UUID(user_id)
+    
+    # Get already synced/scanned IDs for this user
+    rows = await db.fetch("SELECT msg_id FROM gmail_scanned_ids WHERE user_id = $1", uid)
+    existing_ids = [r['msg_id'] for r in rows]
+    
+    # Get user preferred currency
+    user_row = await db.fetchrow("SELECT preferred_currency FROM users WHERE user_id = $1", uid)
+    user_currency = user_row['preferred_currency'] if user_row else 'INR'
+
+    access_token = await _get_valid_google_token(request, user_id)
+    if not access_token:
+        raise HTTPException(401, "Google session expired. Please log in again to reconnect.")
+
+    cerebras_key = settings.cerebras_api_key or os.getenv("CEREBRAS_API_KEY", "")
+    if not cerebras_key:
+        raise HTTPException(500, "AI Service not configured")
+
+    try:
+        new_expenses, all_scanned_ids = await fetch_gmail_expenses(access_token, cerebras_key, existing_ids)
+        
+        # Currency Conversion
+        fx_rates = {}
+        async with httpx.AsyncClient() as client:
+            try:
+                # Cache user base rate
+                fx_res = await client.get(f"https://open.er-api.com/v6/latest/{user_currency}")
+                if fx_res.status_code == 200:
+                    fx_rates = fx_res.json().get("rates", {})
+            except: pass
+
+        for exp in new_expenses:
+            orig_curr = exp.get("currency", "INR").upper()
+            if orig_curr != user_currency and fx_rates:
+                # Convert to User Currency
+                # Rate is: 1 Base (UserCurr) = X OrigCurr. 
+                # So WorkAmount = OrigAmount / Rate
+                rate = fx_rates.get(orig_curr)
+                if rate and rate > 0:
+                    exp["original_amount"] = exp["amount"]
+                    exp["original_currency"] = orig_curr
+                    exp["amount"] = round(float(exp["amount"]) / float(rate), 2)
+                    exp["currency"] = user_currency
+                    exp["converted"] = True
+            else:
+                exp["currency"] = user_currency
+
+        return {
+            "status": "ok", 
+            "expenses": new_expenses,
+            "scanned_ids": all_scanned_ids 
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Gmail Preview failed: {str(e)}")
+
+
+@app.post("/sync/gmail/confirm", tags=["Gmail"])
+async def confirm_gmail_sync(request: Request, user_id: str, body: dict):
+    """Save user-approved expenses and mark all batch IDs as scanned."""
+    db = _db(request)
+    uid = uuid.UUID(user_id)
+    
+    expenses = body.get("expenses", []) or []
+    scanned_ids = body.get("scanned_ids", []) or []
+    
+    saved_count = 0
+    # 1. Save approved expenses
+    for exp in expenses:
+        try:
+            cat_row = await db.fetchrow(
+                "SELECT category_id FROM categories WHERE LOWER(name) = LOWER($1) LIMIT 1",
+                exp.get('category', 'Others')
+            )
+            cat_id = cat_row['category_id'] if cat_row else 6 
+            
+            raw_date = exp.get('expense_date')
+            exp_date = datetime.strptime(raw_date, "%Y-%m-%d").date() if raw_date else datetime.now().date()
+
+            await db.execute(
+                "INSERT INTO expenses (user_id, amount, category_id, expense_date, gmail_msg_id) VALUES ($1, $2, $3, $4, $5)",
+                uid, float(exp['amount']), cat_id, exp_date, exp.get('msg_id')
+            )
+            saved_count += 1
+        except Exception: 
+            continue
+            
+    # 2. Mark all IDs as scanned so they never reappear
+    if scanned_ids:
+        try:
+            await db.execute(
+                "INSERT INTO gmail_scanned_ids (msg_id, user_id) "
+                "SELECT unnest($1::varchar[]), $2 "
+                "ON CONFLICT (msg_id) DO NOTHING",
+                scanned_ids, uid
+            )
+        except Exception as e:
+            print(f"Error marking scanned IDs: {e}")
+
+    return {"status": "ok", "count": saved_count, "message": f"Successfully synced {saved_count} expenses."}
+
 if FRONTEND_DIR.exists():
     app.mount("/_assets", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
-
 
 @app.get("/", include_in_schema=False)
 async def serve_root():
     index = FRONTEND_DIR / "index.html"
     if index.exists():
         return FileResponse(index)
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")

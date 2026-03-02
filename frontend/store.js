@@ -63,29 +63,38 @@ const store = {
     async initUser() {
         this.setLoading('user', true);
         try {
-            const data = await api.listUsers(1);
-            let user = null;
-            if (data.users && data.users.length > 0) {
-                user = data.users[0];
-            } else {
-                user = await api.createUser({
-                    email: `user_${Date.now()}@expense.app`,
-                    full_name: 'User',
-                    preferred_currency: 'INR',
-                });
-                const refreshed = await api.listUsers(1);
-                if (refreshed.users && refreshed.users.length > 0) {
-                    user = refreshed.users[0];
+            // 1. Check URL hash for login_success after Google OAuth redirect
+            const hash = window.location.hash;
+            if (hash.includes('login_success')) {
+                const params = new URLSearchParams(hash.split('?')[1]);
+                const userId = params.get('user_id');
+                if (userId) {
+                    localStorage.setItem('user_id', userId);
+                    window.location.hash = ''; // Clear hash
                 }
             }
+
+            // 2. Check localStorage for persistent session
+            const userId = localStorage.getItem('user_id');
+            if (!userId) {
+                this.update({ user: null, userId: null });
+                return null;
+            }
+
+            // 3. Fetch user data from backend
+            const user = await api.getUser(userId);
             if (user) {
                 this.update({ user, userId: user.user_id });
                 if (user.dark_mode) document.body.classList.add('dark-mode');
                 else document.body.classList.remove('dark-mode');
                 return user;
+            } else {
+                localStorage.removeItem('user_id');
             }
         } catch (e) {
             console.error('Failed to init user:', e);
+            // If user not found (e.g. DB cleared), logout
+            if (e.message.includes('404')) localStorage.removeItem('user_id');
         } finally {
             this.setLoading('user', false);
         }
@@ -261,7 +270,7 @@ const store = {
         }
         const abs = Math.abs(amount || 0);
         try {
-            return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(abs);
+            return new Intl.NumberFormat('en', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(abs);
         } catch (e) {
             return currency + ' ' + abs.toLocaleString();
         }

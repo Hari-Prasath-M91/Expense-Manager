@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     database_url: str | None = None
     cerebras_api_key: str | None = None
 
+    # --- OAuth & Auth -------------------------------------------------------
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    secret_key: str = "your-secret-key"
+
     # --- App ----------------------------------------------------------------
     port: int = 10000
     debug: bool = False
@@ -55,6 +60,5 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
-
 
 settings = Settings()

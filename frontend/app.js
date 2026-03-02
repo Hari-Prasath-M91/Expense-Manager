@@ -13,7 +13,20 @@ function renderSplash() {
         el('div', { class: 'splash-icon' }, svg(icons.money, 120, 120)),
         el('div', { class: 'splash-title' }, 'Personal Expense Manager'),
         el('div', { class: 'splash-subtitle' }, 'Track Smart, Save Better'),
-        el('button', { class: 'splash-btn', id: 'splash-start-btn', onClick: () => router.navigate('dashboard') }, 'Get Started'),
+        el('button', {
+            class: 'google-btn',
+            id: 'google-login-btn',
+            onClick: () => {
+                const btn = document.getElementById('google-login-btn');
+                btn.innerHTML = '<span>Connecting...</span>';
+                btn.disabled = true;
+                // Use absolute URL to backend to avoid path issues
+                window.location.href = api.getBaseUrl() + '/auth/google';
+            }
+        },
+            svg(icons.google, 20, 20),
+            el('span', {}, 'Continue with Google')
+        ),
     );
 }
 
@@ -206,6 +219,8 @@ let _pendingExpenses = [];
 let _draftExpense = null;
 let _invoiceFile = null;
 let _invoicePreview = null;
+let _gmailDrafts = [];
+let _gmailScannedIds = [];
 
 function handleInvoiceSelection(file) {
     if (!file || !file.type.startsWith('image/')) {
@@ -252,7 +267,20 @@ function renderAddExpense() {
                         router.navigate('add-expense');
                     }
                 }
-            }, 'Invoice')
+            }, 'Invoice'),
+            el('button', {
+                class: 'add-tab-btn' + (_addTab === 'gmail' ? ' active' : ''),
+                onClick: () => {
+                    if (_addTab !== 'gmail') {
+                        _pendingExpenses = [];
+                        _draftExpense = null;
+                        _invoiceFile = null;
+                        _invoicePreview = null;
+                        _addTab = 'gmail';
+                        router.navigate('add-expense');
+                    }
+                }
+            }, 'Gmail')
         )
     );
 
@@ -367,6 +395,140 @@ function renderAddExpense() {
             ),
             actionBtns
         );
+    } else if (_addTab === 'gmail') {
+        let gmailContent;
+
+        if (_gmailDrafts && _gmailDrafts.length > 0) {
+            gmailContent = el('div', { class: 'gmail-preview-container' },
+                el('div', { class: 'preview-header' },
+                    el('span', {}, `Found ${_gmailDrafts.length} expenses`),
+                    el('button', { class: 'clear-drafts-btn', onClick: () => { _gmailDrafts = []; router.navigate('add-expense'); } }, 'Clear All')
+                ),
+                el('div', { class: 'gmail-draft-list' },
+                    ..._gmailDrafts.map((draft, idx) => el('div', { class: 'gmail-draft-card' },
+                        el('div', { class: 'card-header' },
+                            el('div', { class: 'sender-info' },
+                                el('i', { class: 'source-icon' }, '📧'),
+                                el('span', { class: 'sender-addr' }, draft.sender || 'Unknown')
+                            ),
+                            el('button', {
+                                class: 'card-remove',
+                                onClick: () => { _gmailDrafts.splice(idx, 1); router.navigate('add-expense'); }
+                            }, '✕')
+                        ),
+                        el('div', { class: 'card-body' },
+                            el('div', { class: 'main-inputs' },
+                                el('input', {
+                                    class: 'draft-desc-input',
+                                    value: draft.description || '',
+                                    onChange: (e) => draft.description = e.target.value,
+                                    placeholder: 'Description'
+                                }),
+                                el('div', { class: 'amount-pill' },
+                                    el('span', { class: 'curr-symbol' }, store.getCurrencySymbol()),
+                                    el('input', {
+                                        class: 'amount-input',
+                                        type: 'number',
+                                        value: draft.amount,
+                                        step: '0.01',
+                                        onChange: (e) => draft.amount = parseFloat(e.target.value) || 0
+                                    })
+                                )
+                            ),
+                            el('div', { class: 'meta-row' },
+                                el('div', { class: 'date-box' },
+                                    el('i', {}, '📅'),
+                                    el('span', {}, draft.expense_date)
+                                ),
+                                el('div', { class: 'cat-box' },
+                                    el('select', {
+                                        class: 'card-cat-select',
+                                        onChange: (e) => draft.category = e.target.value
+                                    },
+                                        ...categories.map(c => el('option', { value: c.name, selected: c.name === draft.category }, `${c.icon} ${c.name}`))
+                                    )
+                                ),
+                                draft.converted ? el('div', { class: 'conv-badge' }, `⚡ ${draft.original_currency}`) : null
+                            ),
+                            el('div', { class: 'email-snippet' },
+                                el('div', { class: 'snippet-label' }, 'Email Content:'),
+                                el('div', { class: 'snippet-text' }, draft.body ? draft.body.substring(0, 150) + '...' : '...')
+                            )
+                        )
+                    ))
+                ),
+                el('button', {
+                    class: 'submit-btn gmail-btn-confirm',
+                    id: 'gmail-confirm-btn',
+                    onClick: async () => {
+                        const btn = document.getElementById('gmail-confirm-btn');
+                        const userId = store.get('userId');
+                        btn.disabled = true;
+                        btn.innerHTML = '<span>Saving...</span>';
+                        try {
+                            const res = await api.confirmGmailSync(userId, {
+                                expenses: _gmailDrafts,
+                                scanned_ids: _gmailScannedIds
+                            });
+                            if (res.status === 'ok') {
+                                // 🎉 Confetti Explosion!
+                                confetti({
+                                    particleCount: 150,
+                                    spread: 70,
+                                    origin: { y: 0.6 },
+                                    colors: ['#b1cca1', '#45B7D1', '#FF6B6B', '#96CEB4']
+                                });
+
+                                toast.success(res.message);
+                                _gmailDrafts = [];
+                                _gmailScannedIds = [];
+                                await store.loadExpenses();
+                                await store.loadSummary();
+                                router.navigate('dashboard');
+                            }
+                        } catch (e) {
+                            toast.error(e.message);
+                        } finally {
+                            btn.disabled = false;
+                        }
+                    }
+                }, 'Save to Expenses')
+            );
+        } else {
+            gmailContent = el('div', { class: 'gmail-sync-card' },
+                el('div', { class: 'gmail-icon-large' }, svg(icons.google, 60, 60)),
+                el('div', { class: 'gmail-sync-title' }, 'Sync with Gmail'),
+                el('div', { class: 'gmail-sync-desc' }, 'Automatically scan your recent emails for receipts and invoices using AI.'),
+                el('button', {
+                    class: 'submit-btn gmail-btn-sync',
+                    id: 'gmail-sync-btn',
+                    onClick: async () => {
+                        const btn = document.getElementById('gmail-sync-btn');
+                        btn.disabled = true;
+                        btn.innerHTML = '<span>Scanning Emails...</span>';
+                        try {
+                            const userId = store.get('userId');
+                            const res = await api.previewGmailSync(userId);
+                            if (res.status === 'ok') {
+                                _gmailDrafts = res.expenses || [];
+                                _gmailScannedIds = res.scanned_ids || [];
+                                if (_gmailDrafts.length === 0) {
+                                    toast.info('No expenses found in recent emails');
+                                }
+                                router.navigate('add-expense');
+                            }
+                        } catch (e) {
+                            toast.error(e.message || 'Gmail Sync failed');
+                        } finally {
+                            btn.disabled = false;
+                            btn.innerHTML = '<span>Start Sync</span>';
+                        }
+                    }
+                }, 'Start Sync')
+            );
+        }
+
+        formContent = el('div', { class: 'gmail-sync-container add-slide-in' }, gmailContent);
     } else {
         const uploadZone = _invoicePreview
             ? el('div', { class: 'invoice-preview-container' },
@@ -678,7 +840,16 @@ function renderProfile() {
                 ),
             ),
 
-            el('button', { class: 'profile-logout-btn', onClick: () => { toast.info('Logged out'); store.set('user', null); router.navigate('splash'); } },
+            el('button', {
+                class: 'profile-logout-btn',
+                onClick: () => {
+                    localStorage.removeItem('user_id');
+                    store.set('user', null);
+                    store.set('userId', null);
+                    toast.info('Logged out');
+                    router.navigate('splash');
+                }
+            },
                 'Log Out'
             ),
         ),
@@ -1307,11 +1478,16 @@ router.register('change-currency', renderChangeCurrency);
 router.register('budget', renderBudget);
 
 (async function init() {
-    router.navigate('splash');
     try {
-        await store.initUser();
+        const user = await store.initUser();
         await store.loadCategories();
+        if (user) {
+            router.navigate('dashboard');
+        } else {
+            router.navigate('splash');
+        }
     } catch (e) {
-        console.warn('Background data load failed:', e);
+        console.warn('Init failed:', e);
+        router.navigate('splash');
     }
 })();

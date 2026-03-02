@@ -20,6 +20,10 @@ class DatabasePool:
             max_size=10,
             command_timeout=30,
         )
+        # Auto-migration: Ensure necessary columns exist
+        async with self._pool.acquire() as conn:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT")
+            await conn.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS gmail_msg_id VARCHAR(255) UNIQUE")
 
     async def disconnect(self) -> None:
         if self._pool:

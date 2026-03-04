@@ -25,6 +25,7 @@ import httpx
 from app.database import DatabasePool
 from app.config import settings
 from app.gmail import fetch_gmail_expenses
+from app.recommendations import get_ai_recommendations
 
 FRONTEND_DIR = pathlib.Path(__file__).parent.parent / "frontend"
 
@@ -441,6 +442,21 @@ async def spending_summary(user_id: str, request: Request, start_date: str | Non
         "by_category": [dict(r) for r in by_category],
         "daily_trend": [dict(r) for r in daily_trend],
     }
+
+
+@app.get("/analytics/recommendations/{user_id}", tags=["Analytics"])
+async def ai_recommendations(user_id: str, request: Request):
+    """Get personalized AI recommendations for the user."""
+    db = _db(request)
+    api_key = settings.cerebras_api_key or os.getenv("CEREBRAS_API_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "CEREBRAS_API_KEY not set")
+    
+    try:
+        recommendations = await get_ai_recommendations(db, user_id, api_key)
+        return recommendations
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 # ===========================================================================

@@ -11,6 +11,7 @@ const store = {
         expenses: [],
         budgets: [],
         summary: null,
+        recommendations: null,
         currentScreen: 'splash',
         sidebarOpen: false,
         loading: {},
@@ -184,6 +185,45 @@ const store = {
             console.error('Failed to load summary:', e);
         } finally {
             this.setLoading('summary', false);
+        }
+    },
+
+    async loadRecommendations() {
+        const userId = this.get('userId');
+        if (!userId) return;
+
+        // 1. Check Cache (Once per day)
+        const cacheKey = `ai_rec_cache_${userId}`;
+        const cached = localStorage.getItem(cacheKey);
+        const today = new Date().toISOString().split('T')[0];
+
+        if (cached) {
+            try {
+                const { date, data } = JSON.parse(cached);
+                if (date === today && data && !data.error) {
+                    this.set('recommendations', data);
+                    return; // Use cached data
+                }
+            } catch (e) {
+                localStorage.removeItem(cacheKey);
+            }
+        }
+
+        // 2. Fetch Fresh Data
+        this.setLoading('recommendations', true);
+        try {
+            const data = await api.aiRecommendations(userId);
+            if (data && !data.error) {
+                this.set('recommendations', data);
+                // Save to cache
+                localStorage.setItem(cacheKey, JSON.stringify({ date: today, data }));
+            } else {
+                this.set('recommendations', data);
+            }
+        } catch (e) {
+            console.error('Failed to load recommendations:', e);
+        } finally {
+            this.setLoading('recommendations', false);
         }
     },
 

@@ -790,30 +790,192 @@ body {
     margin-top: 2px;
 }
 
-/* ---- AI INSIGHT ---- */
-.ai-insight-card {
-    background: var(--green-card);
+/* ---- AI INSIGHT DASHBOARD SUMMARY ---- */
+.ai-summary-card {
+    background: linear-gradient(135deg, #46a36c 0%, #348a56 100%);
     border-radius: var(--radius-xl);
     padding: 18px 20px;
     margin: 16px 0;
-}
-
-.ai-insight-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-black);
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    margin-bottom: 6px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(70, 163, 108, 0.25);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.ai-insight-text {
-    font-size: 14px;
+.ai-summary-card:active {
+    transform: scale(0.98);
+}
+
+.ai-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.ai-summary-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.ai-summary-title {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.ai-summary-score {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.ai-summary-link {
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+/* ---- AI ANALYSIS PAGE ---- */
+.ai-analysis-screen {
+    background: var(--bg-light);
+}
+
+.ai-analysis-hero {
+    background: var(--bg-white);
+    border-radius: var(--radius-2xl);
+    padding: 30px 24px;
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.ai-analysis-score-wrap {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+}
+
+.score-circle {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.score-circle-bg {
+    fill: none;
+    stroke: var(--bg-light);
+    stroke-width: 8;
+}
+
+.score-circle-progress {
+    fill: none;
+    stroke: var(--green-accent);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    /* 2 * PI * 45 */
+    transition: stroke-dashoffset 1s ease-out;
+}
+
+.score-value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 800;
     color: var(--text-dark);
-    line-height: 1.5;
+}
+
+.hero-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-dark);
+}
+
+.hero-desc {
+    font-size: 14px;
+    color: var(--text-mid);
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.rec-list-header {
+    margin: 32px 0 16px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.rec-full-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 40px;
+}
+
+.rec-full-card {
+    background: var(--bg-white);
+    border-radius: var(--radius-xl);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rec-full-type {
+    align-self: flex-start;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.rec-full-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.rec-full-body {
+    font-size: 14px;
+    color: var(--text-mid);
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.rec-full-action {
+    margin-top: 4px;
+    padding: 12px;
+    background: var(--bg-light);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--blue-link);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.rec-full-action:active {
+    background: #e5e5f0;
 }
 
 /* ---- SIDEBAR ---- */

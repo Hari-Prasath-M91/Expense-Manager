@@ -49,7 +49,13 @@ function renderDashboard() {
     }
 
     setTimeout(async () => {
-        await Promise.all([store.loadExpenses(), store.loadSummary(), store.loadCategories(), store.loadBudgets()]);
+        await Promise.all([
+            store.loadExpenses(),
+            store.loadSummary(),
+            store.loadCategories(),
+            store.loadBudgets(),
+            store.loadRecommendations()
+        ]);
         renderSpendingChart();
         renderTrendChart();
         renderAIInsight();
@@ -177,20 +183,133 @@ function renderTrendChart() {
 function renderAIInsight() {
     const section = document.getElementById('ai-insight-section');
     if (!section) return;
-    const summary = store.get('summary');
-    const byCat = summary?.by_category || [];
-    let text = 'Add some expenses to get personalized AI insights about your spending habits!';
-    if (byCat.length > 0) {
-        const top = byCat[0];
-        const totalAll = byCat.reduce((s, c) => s + c.total, 0);
-        const pct = Math.round((top.total / totalAll) * 100);
-        text = `Your top category is ${top.category} at ${pct}% of total spending (${store.formatCurrency(top.total)}). Consider setting a budget to keep it in check!`;
+
+    const recommendations = store.get('recommendations');
+    const isLoading = store.isLoading('recommendations');
+
+    if (isLoading) {
+        section.innerHTML = '';
+        section.appendChild(el('div', { class: 'ai-summary-card loading-skeleton' }));
+        return;
     }
+
+    let score = 0;
+    if (recommendations && !recommendations.error) {
+        score = recommendations.healthScore || 0;
+    }
+
     section.innerHTML = '';
-    section.appendChild(el('div', { class: 'ai-insight-card slide-up' },
-        el('div', { class: 'ai-insight-label' }, '🤖 AI Insight'),
-        el('div', { class: 'ai-insight-text' }, text),
+    section.appendChild(el('div', {
+        class: 'ai-summary-card slide-up',
+        onClick: () => router.navigate('ai-analysis')
+    },
+        el('div', { class: 'ai-summary-left' },
+            el('div', { class: 'ai-summary-icon' }, '🤖'),
+            el('div', { class: 'ai-summary-info' },
+                el('div', { class: 'ai-summary-title' }, 'AI Financial Analysis'),
+                el('div', { class: 'ai-summary-score' }, `Health Score: ${score}/100`)
+            )
+        ),
+        el('div', { class: 'ai-summary-link' }, 'View Analysis →')
     ));
+}
+
+function renderAIAnalysisPage() {
+    const recommendations = store.get('recommendations');
+    const recs = (recommendations && recommendations.recommendations) ? recommendations.recommendations : [];
+    const score = (recommendations && recommendations.healthScore) ? recommendations.healthScore : 0;
+
+    const screen = el('div', { class: 'screen ai-analysis-screen', id: 'ai-analysis-screen' },
+        SubHeader('AI Analysis', 'dashboard'),
+        el('div', { class: 'px-page' },
+            el('div', { class: 'ai-analysis-hero slide-up' },
+                el('div', { class: 'ai-analysis-score-wrap' },
+                    el('svg', { class: 'score-circle', viewBox: '0 0 100 100' },
+                        el('circle', { class: 'score-circle-bg', cx: '50', cy: '50', r: '45' }),
+                        el('circle', {
+                            class: 'score-circle-progress',
+                            cx: '50', cy: '50', r: '45',
+                            style: { strokeDashoffset: `${283 - (283 * score / 100)}` }
+                        })
+                    ),
+                    el('div', { class: 'score-value' }, score)
+                ),
+                el('div', { class: 'ai-analysis-hero-text' },
+                    el('div', { class: 'hero-title' }, 'Financial Health'),
+                    el('div', { class: 'hero-desc' }, getHealthStatusText(score))
+                )
+            ),
+
+            el('div', { class: 'rec-list-header' }, 'Key Recommendations'),
+            el('div', { class: 'rec-full-list stagger-children' },
+                ...recs.map(rec => {
+                    const hasValidAction = isValidRecommendationAction(rec.action);
+                    return el('div', { class: 'rec-full-card' },
+                        el('div', { class: `rec-full-type rec-type-${rec.type}` }, rec.type),
+                        el('div', { class: 'rec-full-title' }, rec.title),
+                        el('div', { class: 'rec-full-body' }, rec.body),
+                        (rec.action && hasValidAction) ? el('button', {
+                            class: 'rec-full-action',
+                            onClick: () => handleRecommendationAction(rec.action)
+                        }, formatActionText(rec.action)) : null
+                    );
+                })
+            ),
+
+            recs.length === 0 ? EmptyState('🤖', 'No recommendations yet', 'Keep tracking your expenses to get personalized insights.') : null
+        )
+    );
+
+    return screen;
+}
+
+function getHealthStatusText(score) {
+    if (score >= 80) return 'Excellent! You are managing your finances like a pro.';
+    if (score >= 60) return 'Good job! There are a few areas to optimize.';
+    if (score >= 40) return 'Noticeable spending. Consider reviewing your budgets.';
+    return 'Action required. Your financial health needs attention.';
+}
+
+function handleRecommendationAction(action) {
+    if (!action) return;
+    const act = action.toLowerCase();
+    if (act.includes('budget')) router.navigate('budget');
+    else if (act.includes('add')) router.navigate('add-expense');
+    else if (act.includes('transaction') || act.includes('expense')) router.navigate('transactions');
+    else if (act.includes('profile')) router.navigate('profile');
+}
+
+function isValidRecommendationAction(action) {
+    if (!action) return false;
+    const act = action.toLowerCase();
+    return act.includes('budget') ||
+        act.includes('add') ||
+        act.includes('transaction') ||
+        act.includes('expense') ||
+        act.includes('profile') ||
+        act.includes('saving');
+}
+
+function formatActionText(text) {
+    if (!text) return '';
+    // If it has spaces already, just return it
+    if (text.includes(' ')) return text;
+
+    // Split PascalCase or camelCase by adding spaces before uppercase letters
+    // "ReviewShoppingBudget" -> "Review Shopping Budget"
+    let result = text.replace(/([A-Z])/g, ' $1').trim();
+
+    // If it's still one big word (lowercase), try to split common financial terms
+    if (!result.includes(' ')) {
+        const terms = ['budget', 'expense', 'transaction', 'profile', 'add', 'view', 'review', 'shopping', 'saving'];
+        terms.forEach(term => {
+            const regex = new RegExp(`(${term})`, 'gi');
+            result = result.replace(regex, ' $1');
+        });
+        result = result.trim();
+    }
+
+    return result;
 }
 
 function renderRecentTransactions() {
@@ -1960,6 +2079,7 @@ router.register('profile', renderProfile);
 router.register('edit-profile', renderEditProfile);
 router.register('change-currency', renderChangeCurrency);
 router.register('budget', renderBudget);
+router.register('ai-analysis', renderAIAnalysisPage);
 
 (async function init() {
     try {

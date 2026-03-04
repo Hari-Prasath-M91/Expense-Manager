@@ -15,6 +15,7 @@ from app.database import DatabasePool
 # ---------------------------------------------------------------------------
 async def _get_total_spending(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     """Get total spending for this user."""
+    currency = kwargs.get('currency', '₹')
     row = await db.fetchrow(
         "SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count, "
         "COALESCE(AVG(amount),0) AS avg FROM expenses WHERE user_id = $1",
@@ -22,13 +23,14 @@ async def _get_total_spending(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str
     )
     r = dict(row)
     return (
-        f"Total spent: ₹{r['total']:.0f} across {r['count']} transactions. "
-        f"Average per transaction: ₹{r['avg']:.0f}."
+        f"Total spent: {currency} {r['total']:.0f} across {r['count']} transactions. "
+        f"Average per transaction: {currency} {r['avg']:.0f}."
     )
 
 
 async def _get_category_breakdown(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     """Get spending breakdown by category."""
+    currency = kwargs.get('currency', '₹')
     rows = await db.fetch(
         "SELECT c.name, c.icon, SUM(e.amount) AS total, COUNT(*) AS count "
         "FROM expenses e JOIN categories c ON e.category_id = c.category_id "
@@ -37,12 +39,13 @@ async def _get_category_breakdown(db: DatabasePool, uid: uuid.UUID, **kwargs) ->
     )
     if not rows:
         return "No expenses found. The user hasn't recorded any spending yet."
-    lines = [f"  {dict(r)['icon']} {dict(r)['name']}: ₹{dict(r)['total']:.0f} ({dict(r)['count']} txns)" for r in rows]
+    lines = [f"  {dict(r)['icon']} {dict(r)['name']}: {currency} {dict(r)['total']:.0f} ({dict(r)['count']} txns)" for r in rows]
     return "Spending by category:\n" + "\n".join(lines)
 
 
 async def _get_recent_expenses(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     """Get the 10 most recent expenses."""
+    currency = kwargs.get('currency', '₹')
     rows = await db.fetch(
         "SELECT e.amount, e.expense_date, "
         "c.name AS category FROM expenses e "
@@ -55,12 +58,13 @@ async def _get_recent_expenses(db: DatabasePool, uid: uuid.UUID, **kwargs) -> st
     lines = []
     for r in rows:
         d = dict(r)
-        lines.append(f"  ₹{d['amount']:.0f} - ({d.get('category', 'Uncategorized')}) on {d['expense_date']}")
+        lines.append(f"  {currency} {d['amount']:.0f} - ({d.get('category', 'Uncategorized')}) on {d['expense_date']}")
     return "Recent expenses:\n" + "\n".join(lines)
 
 
 async def _get_budget_status(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     """Get budget vs actual spending for current month."""
+    currency = kwargs.get('currency', '₹')
     from datetime import datetime
     month = datetime.now().strftime("%Y-%m")
     budgets = await db.fetch(
@@ -85,12 +89,13 @@ async def _get_budget_status(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
         ) or 0
         remaining = bd["budget"] - float(spent)
         status = "✅ Under" if remaining >= 0 else "🚨 OVER"
-        lines.append(f"  {bd.get('icon','')} {cat_name}: ₹{spent:.0f} / ₹{bd['budget']:.0f} ({status} by ₹{abs(remaining):.0f})")
+        lines.append(f"  {bd.get('icon','')} {cat_name}: {currency} {spent:.0f} / {currency} {bd['budget']:.0f} ({status} by {currency} {abs(remaining):.0f})")
     return f"Budget status for {month}:\n" + "\n".join(lines)
 
 
 async def _get_daily_trend(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     """Get daily spending trend for the last 7 days."""
+    currency = kwargs.get('currency', '₹')
     rows = await db.fetch(
         "SELECT expense_date, SUM(amount) AS total "
         "FROM expenses WHERE user_id = $1 "
@@ -100,12 +105,13 @@ async def _get_daily_trend(db: DatabasePool, uid: uuid.UUID, **kwargs) -> str:
     )
     if not rows:
         return "No spending in the last 7 days."
-    lines = [f"  {dict(r)['expense_date']}: ₹{dict(r)['total']:.0f}" for r in rows]
+    lines = [f"  {dict(r)['expense_date']}: {currency} {dict(r)['total']:.0f}" for r in rows]
     return "Daily spending (last 7 days):\n" + "\n".join(lines)
 
 
-async def _add_expense(db: DatabasePool, uid: uuid.UUID, amount: float, category_name: str, expense_date: str) -> str:
+async def _add_expense(db: DatabasePool, uid: uuid.UUID, amount: float, category_name: str, expense_date: str, **kwargs) -> str:
     """Add a new expense for the user."""
+    currency = kwargs.get('currency', '₹')
     from datetime import datetime
     try:
         # 1. Normalize category
@@ -137,7 +143,7 @@ async def _add_expense(db: DatabasePool, uid: uuid.UUID, amount: float, category
             "INSERT INTO expenses (user_id, amount, category_id, expense_date) VALUES ($1, $2, $3, $4)",
             uid, float(amount), cat_id, dt
         )
-        return f"Successfully recorded: ₹{amount:.0f} for {actual_cat_name} on {expense_date}."
+        return f"Successfully recorded: {currency} {amount:.0f} for {actual_cat_name} on {expense_date}."
     except Exception as e:
         return f"Failed to add expense: {str(e)}"
 
@@ -215,12 +221,13 @@ TOOL_MAP = {
 
 SYSTEM_PROMPT = """You are a helpful AI financial assistant for a personal expense tracking app.
 Today is {today}.
+The user's preferred currency is {currency}.
 You have tools to query and record the user's real expense data from their database.
 
 Guidelines:
 - Use the tools to fetch data OR record new expenses if the user asks (e.g., 'I spent 500 on lunch today')
 - Be concise and friendly with your responses
-- Use ₹ (INR) for currency
+- Always mention amounts with the correct currency symbol ({currency})
 - Give actionable financial tips when relevant
 - Keep responses under 150 words"""
 
@@ -236,9 +243,13 @@ async def run_chat(db: DatabasePool, user_id: str, message: str, api_key: str, h
         client = Cerebras(api_key=api_key)
         uid = uuid.UUID(user_id)
         
+        # Get user preferred currency
+        user_row = await db.fetchrow("SELECT preferred_currency FROM users WHERE user_id = $1", uid)
+        currency = user_row['preferred_currency'] if user_row else '₹'
+
         # Inject today's date
         current_date_str = datetime.now().strftime("%A, %B %d, %Y")
-        prompt = SYSTEM_PROMPT.format(today=current_date_str)
+        prompt = SYSTEM_PROMPT.format(today=current_date_str, currency=currency)
 
         messages = [
             {"role": "system", "content": prompt}
@@ -273,6 +284,7 @@ async def run_chat(db: DatabasePool, user_id: str, message: str, api_key: str, h
                             # Parse JSON arguments from the model
                             raw_args = tool_call.function.arguments
                             kwargs = json.loads(raw_args) if raw_args else {}
+                            kwargs['currency'] = currency
                             
                             # Call the function with db, uid, and the provided arguments
                             result = await fn(db, uid, **kwargs)

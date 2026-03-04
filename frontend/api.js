@@ -88,6 +88,9 @@ const api = {
         }
         return this.get(`/analytics/summary/${userId}${q}`);
     },
+    aiRecommendations(userId) {
+        return this.get(`/analytics/recommendations/${userId}`);
+    },
 
     // Gmail Sync
     previewGmailSync(userId) {

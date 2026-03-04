@@ -241,8 +241,8 @@ function renderAIAnalysisPage() {
             el('div', { class: 'ai-analysis-hero slide-up' },
                 el('div', { class: 'ai-analysis-score-wrap' },
                     svg(`<svg class="score-circle" viewBox="0 0 100 100">
-                        <circle class="score-circle-bg" cx="50" cy="50" r="45"></circle>
-                        <circle id="ai-score-progress" class="score-circle-progress" cx="50" cy="50" r="45" style="stroke-dashoffset: ${283 - (283 * score / 100)}"></circle>
+                        <circle class="score-circle-bg" cx="50" cy="50" r="42"></circle>
+                        <circle id="ai-score-progress" class="score-circle-progress" cx="50" cy="50" r="42" style="stroke-dashoffset: ${264 - (264 * score / 100)}"></circle>
                     </svg>`, '100%', '100%'),
                     el('div', { class: 'score-value', id: 'ai-score-value' }, score)
                 ),
@@ -273,7 +273,7 @@ function renderAIAnalysisPage() {
                             const scoreVal = document.getElementById('ai-score-value');
                             const heroDesc = document.getElementById('ai-hero-desc');
 
-                            if (progress) progress.style.strokeDashoffset = `${283 - (283 * newScore / 100)}`;
+                            if (progress) progress.style.strokeDashoffset = `${264 - (264 * newScore / 100)}`;
                             if (scoreVal) scoreVal.textContent = newScore;
                             if (heroDesc) heroDesc.textContent = getHealthStatusText(newScore);
 

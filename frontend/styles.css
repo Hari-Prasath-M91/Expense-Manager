@@ -850,55 +850,87 @@ body {
 
 .ai-analysis-hero {
     background: var(--green-accent);
-    border-radius: 999px;
-    padding: 28px 32px;
-    margin: 32px 16px 20px 16px;
+    border-radius: 40px;
+    padding: 32px;
+    margin: 24px 16px;
     display: flex;
     align-items: center;
     text-align: left;
-    gap: 24px;
-    box-shadow: var(--shadow-sm);
+    gap: 32px;
+    box-shadow: 0 20px 40px rgba(70, 163, 108, 0.25);
+    background: linear-gradient(135deg, #46a36c 0%, #3a8a5a 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.ai-analysis-hero::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
 }
 
 .ai-analysis-score-wrap {
     position: relative;
     flex-shrink: 0;
-    width: auto;
-    height: auto;
-    background: transparent;
-    border-radius: 0;
+    width: 100px;
+    height: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: none;
 }
 
-/* Hide the SVG ring — replaced by oval */
-.score-circle,
-.score-circle-bg,
+.score-circle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.score-circle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 8;
+}
+
 .score-circle-progress {
-    display: none;
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 264;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
 }
 
 .score-value {
-    position: static;
-    font-size: 44px;
+    font-size: 38px;
     font-weight: 900;
     color: #ffffff;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
 }
 
 .hero-title {
-    font-size: 18px;
+    font-size: 26px;
     font-weight: 800;
     color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
 }
 
 .hero-desc {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.85);
-    margin-top: 5px;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-top: 8px;
     line-height: 1.4;
+    max-width: 220px;
 }
 
 .rec-list-header {

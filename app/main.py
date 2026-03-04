@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -268,6 +268,7 @@ class ExpenseCreate(BaseModel):
     user_id: str
     amount: float
     category_id: int | None = None
+    description: str | None = None
     expense_date: str  # YYYY-MM-DD
 
 
@@ -278,9 +279,9 @@ async def create_expense(body: ExpenseCreate, request: Request):
         import datetime
         dt = datetime.datetime.strptime(body.expense_date, "%Y-%m-%d").date()
         row = await db.fetchrow(
-            "INSERT INTO expenses (user_id, amount, category_id, expense_date) "
-            "VALUES ($1, $2, $3, $4) RETURNING *",
-            uuid.UUID(body.user_id), body.amount, body.category_id, dt,
+            "INSERT INTO expenses (user_id, amount, category_id, description, expense_date) "
+            "VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            uuid.UUID(body.user_id), body.amount, body.category_id, body.description, dt,
         )
         return dict(row)
     except Exception as e:
@@ -315,7 +316,7 @@ async def list_expenses(
     rows = await db.fetch(
         f"""
         SELECT e.expense_id, e.user_id, e.amount, e.category_id,
-               e.expense_date,
+               e.description, e.expense_date,
                c.name AS category_name, c.icon AS category_icon, c.color AS category_color,
                e.created_at
         FROM expenses e
@@ -600,8 +601,8 @@ async def confirm_gmail_sync(request: Request, user_id: str, body: dict):
             exp_date = datetime.strptime(raw_date, "%Y-%m-%d").date() if raw_date else datetime.now().date()
 
             await db.execute(
-                "INSERT INTO expenses (user_id, amount, category_id, expense_date, gmail_msg_id) VALUES ($1, $2, $3, $4, $5)",
-                uid, float(exp['amount']), cat_id, exp_date, exp.get('msg_id')
+                "INSERT INTO expenses (user_id, amount, category_id, description, expense_date, gmail_msg_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                uid, float(exp['amount']), cat_id, exp.get('description'), exp_date, exp.get('msg_id')
             )
             saved_count += 1
         except Exception: 
@@ -620,6 +621,63 @@ async def confirm_gmail_sync(request: Request, user_id: str, body: dict):
             print(f"Error marking scanned IDs: {e}")
 
     return {"status": "ok", "count": saved_count, "message": f"Successfully synced {saved_count} expenses."}
+
+
+# ===========================================================================
+# OCR — Invoice Processing
+# ===========================================================================
+@app.post("/ocr/upload", tags=["OCR"])
+async def ocr_upload(file: UploadFile = File(...)):
+    """Upload an invoice/receipt image, OCR it, and return structured items."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "File must be an image (JPG, PNG, etc.)")
+
+    image_bytes = await file.read()
+    cerebras_key = settings.cerebras_api_key or os.getenv("CEREBRAS_API_KEY", "")
+
+    try:
+        from app.ocr import process_receipt
+        result = process_receipt(image_bytes, cerebras_key)
+        return {"status": "ok", **result}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"OCR processing failed: {str(e)}")
+
+
+class OCRSaveItem(BaseModel):
+    description: str | None = None
+    amount: float
+    category_id: int | None = None
+    expense_date: str  # YYYY-MM-DD
+
+
+class OCRSaveRequest(BaseModel):
+    user_id: str
+    items: list[OCRSaveItem]
+
+
+@app.post("/ocr/save", tags=["OCR"])
+async def ocr_save(body: OCRSaveRequest, request: Request):
+    """Batch-save OCR-extracted expense items."""
+    db = _db(request)
+    uid = uuid.UUID(body.user_id)
+    saved = 0
+    import datetime as dt_mod
+    for item in body.items:
+        try:
+            exp_date = dt_mod.datetime.strptime(item.expense_date, "%Y-%m-%d").date()
+            await db.execute(
+                "INSERT INTO expenses (user_id, amount, category_id, description, expense_date) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                uid, item.amount, item.category_id, item.description, exp_date,
+            )
+            saved += 1
+        except Exception as e:
+            print(f"OCR save error: {e}")
+            continue
+    return {"status": "ok", "count": saved, "message": f"Saved {saved} expenses."}
+
 
 if FRONTEND_DIR.exists():
     app.mount("/_assets", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # --- App ----------------------------------------------------------------
     port: int = 10000
     debug: bool = False
+    tesseract_cmd: str | None = None
 
     @property
     def asyncpg_dsn(self) -> str:
@@ -60,5 +61,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 settings = Settings()

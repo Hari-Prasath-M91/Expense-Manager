@@ -96,4 +96,20 @@ const api = {
     confirmGmailSync(userId, expenses) {
         return this.post(`/sync/gmail/confirm?user_id=${userId}`, expenses);
     },
+
+    // OCR
+    async uploadInvoice(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const url = `${API_BASE}/ocr/upload`;
+        const res = await fetch(url, { method: 'POST', body: formData });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+        return res.json();
+    },
+    saveOCRItems(data) {
+        return this.post('/ocr/save', data);
+    },
 };

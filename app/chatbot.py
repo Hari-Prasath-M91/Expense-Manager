@@ -1,5 +1,5 @@
 # ============================================================================
-# Chatbot — LangChain + Cerebras (llama-4-scout-17b-16e-instruct)
+# Chatbot — LangChain + Cerebras(GPT-OSS-120b)
 # Tools that query the database directly for expense insights
 # ============================================================================
 from __future__ import annotations

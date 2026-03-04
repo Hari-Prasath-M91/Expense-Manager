@@ -131,12 +131,13 @@ function TransactionItem(expense) {
     const catName = cat ? cat.name : (expense.category_name || 'Uncategorized');
     const catIcon = cat ? cat.icon : '📌';
     const catColor = cat ? cat.color : '#D5DBDB';
+    const desc = expense.description || '';
 
     return el('div', { class: 'transaction-item' },
         el('div', { class: 'transaction-icon', style: { background: catColor + '22' } }, catIcon),
         el('div', { class: 'transaction-info' },
-            el('div', { class: 'transaction-name' }, catName),
-            el('div', { class: 'transaction-category' }, catName),
+            el('div', { class: 'transaction-name' }, desc || catName),
+            el('div', { class: 'transaction-category' }, desc ? catName : ''),
         ),
         el('div', { class: 'transaction-right' },
             el('div', { class: 'transaction-amount expense' }, '- ' + store.formatCurrency(expense.amount)),

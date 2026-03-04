@@ -222,6 +222,20 @@ let _invoicePreview = null;
 let _gmailDrafts = [];
 let _gmailScannedIds = [];
 
+/* ---- OCR State ---- */
+let _ocrItems = [];        // [{description, amount, tax, category_id}]
+let _ocrMerchant = '';
+let _ocrDate = '';
+let _ocrTotalTax = 0;
+let _ocrTips = 0;
+let _ocrProcessing = false;
+
+/* ---- Split State ---- */
+let _splitItems = [];      // items to split
+let _splitPeople = ['Me']; // people involved, always starts with 'Me'
+let _splitAssignments = {}; // { itemIdx: [personNames...] }
+let _splitOpenDropdownIdx = null; // Tracks which dropdown is currently open
+
 function handleInvoiceSelection(file) {
     if (!file || !file.type.startsWith('image/')) {
         toast.error('Please select an image file');
@@ -386,6 +400,10 @@ function renderAddExpense() {
                 CategoryDropdown(categories, null, initialCat)
             ),
             el('div', { class: 'form-group' },
+                el('label', { class: 'form-label' }, 'DESCRIPTION'),
+                el('input', { class: 'form-input', id: 'expense-description', type: 'text', placeholder: 'What was this expense for?', value: _draftExpense ? (_draftExpense.description || '') : '' }),
+            ),
+            el('div', { class: 'form-group' },
                 el('label', { class: 'form-label' }, 'AMOUNT'),
                 el('input', { class: 'form-input', id: 'expense-amount', type: 'number', placeholder: 'Enter Amount', required: 'true', step: '0.01', min: '0.01', value: _draftExpense ? _draftExpense.amount : '' }),
             ),
@@ -530,67 +548,117 @@ function renderAddExpense() {
 
         formContent = el('div', { class: 'gmail-sync-container add-slide-in' }, gmailContent);
     } else {
-        const uploadZone = _invoicePreview
-            ? el('div', { class: 'invoice-preview-container' },
-                el('img', { src: _invoicePreview, class: 'invoice-preview-img' }),
-                el('button', {
-                    class: 'invoice-remove-btn',
-                    type: 'button',
-                    onClick: (e) => {
+        // === INVOICE TAB: Upload → Process → Results Table ===
+        if (_ocrItems.length > 0) {
+            // --- RESULTS TABLE ---
+            formContent = renderOCRResults(categories, todayStr);
+        } else {
+            // --- UPLOAD ZONE ---
+            const uploadZone = _invoicePreview
+                ? el('div', { class: 'invoice-preview-container' },
+                    el('img', { src: _invoicePreview, class: 'invoice-preview-img' }),
+                    el('button', {
+                        class: 'invoice-remove-btn',
+                        type: 'button',
+                        onClick: (e) => {
+                            e.preventDefault();
+                            _invoiceFile = null;
+                            _invoicePreview = null;
+                            router.navigate('add-expense');
+                        }
+                    }, svg(icons.close || '✕', 20, 20))
+                )
+                : el('div', {
+                    class: 'invoice-upload-zone',
+                    onClick: () => document.getElementById('invoice-file-input').click(),
+                    onDragOver: (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); },
+                    onDragLeave: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); },
+                    onDrop: (e) => {
                         e.preventDefault();
-                        _invoiceFile = null;
-                        _invoicePreview = null;
-                        router.navigate('add-expense');
-                    }
-                }, svg(icons.close || '✕', 20, 20))
-            )
-            : el('div', {
-                class: 'invoice-upload-zone',
-                onClick: () => document.getElementById('invoice-file-input').click(),
-                onDragOver: (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); },
-                onDragLeave: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); },
-                onDrop: (e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('drag-over');
-                    const file = e.dataTransfer.files[0];
-                    if (file) handleInvoiceSelection(file);
-                }
-            },
-                el('div', { class: 'upload-zone-icon' }, svg(icons.invoice, 48, 48)),
-                el('div', { class: 'upload-zone-text' }, 'Choose an invoice or drag it here'),
-                el('div', { class: 'upload-zone-subtext' }, 'JPG, PNG, PDF up to 10MB'),
-                el('input', {
-                    type: 'file',
-                    id: 'invoice-file-input',
-                    style: 'display: none;',
-                    accept: 'image/*,application/pdf',
-                    onChange: (e) => {
-                        const file = e.target.files[0];
+                        e.currentTarget.classList.remove('drag-over');
+                        const file = e.dataTransfer.files[0];
                         if (file) handleInvoiceSelection(file);
                     }
-                })
-            );
+                },
+                    el('div', { class: 'upload-zone-icon' }, svg(icons.invoice, 48, 48)),
+                    el('div', { class: 'upload-zone-text' }, 'Choose an invoice or drag it here'),
+                    el('div', { class: 'upload-zone-subtext' }, 'JPG, PNG up to 10MB'),
+                    el('input', {
+                        type: 'file',
+                        id: 'invoice-file-input',
+                        style: 'display: none;',
+                        accept: 'image/*',
+                        onChange: (e) => {
+                            const file = e.target.files[0];
+                            if (file) handleInvoiceSelection(file);
+                        }
+                    })
+                );
 
-        formContent = el('form', {
-            class: 'expense-form add-slide-in',
-            id: 'add-invoice-form',
-            onSubmit: (e) => {
-                e.preventDefault();
-                if (!_invoiceFile) return toast.error('Please upload an invoice first');
-                toast.info('Invoice scanning coming soon! This file will be processed.');
-            }
-        },
-            el('div', { class: 'form-group' },
-                el('label', { class: 'form-label' }, 'SCAN RECEIPT'),
-                uploadZone
-            ),
-            el('button', {
-                class: 'submit-btn' + (_invoiceFile ? ' submit-btn-vibrant' : ''),
-                type: 'submit',
-                disabled: !_invoiceFile,
-                style: _invoiceFile ? '' : 'opacity: 0.6; cursor: not-allowed; height: 50px;'
-            }, _invoiceFile ? 'Process Invoice' : 'Select a File'),
-        );
+            formContent = el('div', { class: 'expense-form add-slide-in', id: 'add-invoice-form' },
+                el('div', { class: 'form-group' },
+                    el('label', { class: 'form-label' }, 'SCAN RECEIPT'),
+                    uploadZone
+                ),
+                el('button', {
+                    class: 'submit-btn' + (_invoiceFile ? ' submit-btn-vibrant' : ''),
+                    type: 'button',
+                    id: 'ocr-process-btn',
+                    disabled: (!_invoiceFile || _ocrProcessing) ? true : null,
+                    style: _invoiceFile ? '' : 'opacity: 0.6; cursor: not-allowed; height: 50px;',
+                    onClick: async () => {
+                        if (!_invoiceFile) return toast.error('Please upload an invoice first');
+                        const btn = document.getElementById('ocr-process-btn');
+                        btn.disabled = true;
+                        btn.textContent = 'Processing...';
+                        _ocrProcessing = true;
+                        try {
+                            const res = await api.uploadInvoice(_invoiceFile);
+                            if (res.status === 'ok' && res.items && res.items.length > 0) {
+                                _ocrItems = res.items.map(it => ({
+                                    description: it.description || '',
+                                    amount: it.amount || 0,
+                                    tax: 0,
+                                    category_id: null,
+                                }));
+                                // Distribute taxes proportionally
+                                const totalTax = (res.cgst || 0) + (res.sgst || 0) + (res.additional_charge || 0);
+                                _ocrTotalTax = totalTax;
+                                if (totalTax > 0) {
+                                    const preTaxTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
+                                    const taxPercent = (totalTax / preTaxTotal) * 100; // total Tax amt / pre tax total * 100 = tax %
+
+                                    _ocrItems.forEach(it => {
+                                        // Item amt * tax% = final tax for the item
+                                        const finalTax = it.amount * (taxPercent / 100);
+                                        it.tax = Math.round(finalTax * 100) / 100; // round to 2 decimal places
+                                    });
+                                }
+                                _ocrMerchant = res.merchant || '';
+                                _ocrDate = '';
+                                // Parse date from DD/MM/YYYY to YYYY-MM-DD
+                                if (res.date) {
+                                    const dp = res.date.split('/');
+                                    if (dp.length === 3) {
+                                        const yr = dp[2].length === 4 ? dp[2] : '20' + dp[2];
+                                        _ocrDate = `${yr}-${dp[1].padStart(2, '0')}-${dp[0].padStart(2, '0')}`;
+                                    }
+                                }
+                                if (!_ocrDate) _ocrDate = todayStr;
+                                toast.success(`Found ${_ocrItems.length} items!`);
+                            } else {
+                                toast.error('No items found in the receipt. Try a clearer image.');
+                            }
+                        } catch (err) {
+                            toast.error('OCR failed: ' + err.message);
+                        } finally {
+                            _ocrProcessing = false;
+                            router.navigate('add-expense');
+                        }
+                    }
+                }, _ocrProcessing ? 'Processing...' : (_invoiceFile ? 'Process Invoice' : 'Select a File')),
+            );
+        }
     }
 
     return el('div', { class: 'screen add-expense-bg', id: 'add-expense-screen' },
@@ -607,6 +675,8 @@ async function handleAddToList(e) {
     const catId = parseInt(document.getElementById('expense-category').value);
     const amount = parseFloat(document.getElementById('expense-amount').value);
     const date = document.getElementById('expense-date').value;
+    const descEl = document.getElementById('expense-description');
+    const description = descEl ? descEl.value.trim() : '';
 
     if (!catId) {
         toast.error('Please select a category');
@@ -617,6 +687,7 @@ async function handleAddToList(e) {
         user_id: store.get('userId'),
         amount,
         category_id: catId,
+        description: description || null,
         expense_date: date
     });
 
@@ -630,6 +701,8 @@ async function handleSaveAllPending(e) {
     const amountStr = document.getElementById('expense-amount').value;
     const amount = parseFloat(amountStr);
     const date = document.getElementById('expense-date').value;
+    const descEl = document.getElementById('expense-description');
+    const description = descEl ? descEl.value.trim() : '';
 
     // Check if current form can be added as a last item
     const currentList = [..._pendingExpenses];
@@ -638,6 +711,7 @@ async function handleSaveAllPending(e) {
             user_id: store.get('userId'),
             amount,
             category_id: catId,
+            description: description || null,
             expense_date: date
         });
     }
@@ -656,6 +730,7 @@ async function handleSaveAllPending(e) {
         await Promise.all(promises);
 
         const count = currentList.length;
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#b1cca1', '#45B7D1', '#FF6B6B', '#96CEB4'] });
         toast.success(count === 1 ? '1 expense saved!' : `${count} expenses saved!`);
         _pendingExpenses = [];
         _draftExpense = null;
@@ -666,6 +741,414 @@ async function handleSaveAllPending(e) {
         toast.error('Failed to save: ' + err.message);
         btn.disabled = false;
         btn.textContent = originalText;
+    }
+}
+
+/* ---- OCR Results Table ---- */
+function renderOCRResults(categories, todayStr) {
+    const dateVal = _ocrDate || todayStr;
+
+    const tableRows = _ocrItems.map((item, idx) => {
+        return el('tr', { class: 'ocr-table-row' },
+            el('td', { class: 'ocr-cell' },
+                el('input', {
+                    class: 'ocr-cell-input', type: 'text', value: item.description,
+                    onInput: (e) => { _ocrItems[idx].description = e.target.value; }
+                })
+            ),
+            el('td', { class: 'ocr-cell ocr-cell-num' },
+                el('input', {
+                    class: 'ocr-cell-input num', type: 'number', step: '0.01', value: item.tax,
+                    readonly: true,
+                    style: 'opacity: 0.6; cursor: not-allowed; background: transparent;'
+                })
+            ),
+            el('td', { class: 'ocr-cell ocr-cell-num' },
+                el('input', {
+                    class: 'ocr-cell-input num', type: 'number', step: '0.01', value: item.amount,
+                    onChange: (e) => {
+                        _ocrItems[idx].amount = parseFloat(e.target.value) || 0;
+                        const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
+                        const tp = (_ocrTotalTax / pTotal) * 100;
+                        _ocrItems.forEach(it => {
+                            const finalTax = it.amount * (tp / 100);
+                            it.tax = Math.round(finalTax * 100) / 100;
+                        });
+                        queueMicrotask(() => router.navigate('add-expense'));
+                    }
+                })
+            ),
+            el('td', { class: 'ocr-cell' },
+                el('select', {
+                    class: 'ocr-cell-select',
+                    onChange: (e) => { _ocrItems[idx].category_id = parseInt(e.target.value) || null; }
+                },
+                    el('option', { value: '' }, 'Select'),
+                    ...categories.map(c => el('option', {
+                        value: c.category_id,
+                        selected: item.category_id === c.category_id ? 'selected' : null
+                    }, `${c.icon} ${c.name}`))
+                )
+            ),
+            el('td', { class: 'ocr-cell ocr-cell-action' },
+                el('button', {
+                    class: 'ocr-remove-btn', type: 'button',
+                    onClick: () => { _ocrItems.splice(idx, 1); router.navigate('add-expense'); }
+                }, '✕')
+            )
+        );
+    });
+
+    const preTaxTotal = _ocrItems.reduce((s, i) => s + i.amount, 0);
+    const grandTotal = _ocrItems.reduce((s, i) => s + i.amount + i.tax, 0) + _ocrTips;
+
+    return el('div', { class: 'ocr-results-container add-slide-in' },
+        _ocrMerchant ? el('div', { class: 'ocr-merchant-label' }, `📋 ${_ocrMerchant}`) : null,
+        el('div', { class: 'ocr-table-wrap' },
+            el('table', { class: 'ocr-table' },
+                el('thead', {},
+                    el('tr', {},
+                        el('th', {}, 'Description'),
+                        el('th', { class: 'ocr-th-num' }, 'Tax'),
+                        el('th', { class: 'ocr-th-num' }, 'Subtotal'),
+                        el('th', { class: 'ocr-th-category' },
+                            el('select', {
+                                class: 'ocr-master-category-select',
+                                onChange: (e) => {
+                                    const catId = parseInt(e.target.value) || null;
+                                    if (catId) {
+                                        _ocrItems.forEach(it => {
+                                            it.category_id = catId;
+                                        });
+                                        e.target.value = ''; // reset master select
+                                        queueMicrotask(() => router.navigate('add-expense'));
+                                    }
+                                }
+                            },
+                                el('option', { value: '' }, 'Assign All'),
+                                ...categories.map(c => el('option', { value: c.category_id }, `${c.icon} ${c.name}`))
+                            )
+                        ),
+                        el('th', { class: 'ocr-th-action' }, ''),
+                    )
+                ),
+                el('tbody', {}, ...tableRows)
+            )
+        ),
+
+        // --- NEW OCR Totals Card --- 
+        el('div', { class: 'ocr-totals-card' },
+            el('div', { class: 'ocr-totals-row' },
+                el('span', { class: 'ocr-totals-label' }, 'Pre-Tax Total'),
+                el('span', { class: 'ocr-totals-val' }, store.formatCurrency(preTaxTotal))
+            ),
+            el('div', { class: 'ocr-totals-row' },
+                el('span', { class: 'ocr-totals-label' }, 'Total Tax'),
+                el('div', { class: 'ocr-totals-input-wrap' },
+                    el('span', { class: 'currency-prefix' }, store.getCurrencySymbol()),
+                    el('input', {
+                        class: 'ocr-totals-input num', type: 'number', step: '0.01',
+                        value: Math.round(_ocrTotalTax * 100) / 100,
+                        onChange: (e) => {
+                            _ocrTotalTax = parseFloat(e.target.value) || 0;
+                            const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
+                            const tp = (_ocrTotalTax / pTotal) * 100;
+                            _ocrItems.forEach(it => {
+                                const finalTax = it.amount * (tp / 100);
+                                it.tax = Math.round(finalTax * 100) / 100;
+                            });
+                            queueMicrotask(() => router.navigate('add-expense'));
+                        }
+                    })
+                )
+            ),
+            el('div', { class: 'ocr-totals-row' },
+                el('span', { class: 'ocr-totals-label' }, 'Tips / Other'),
+                el('div', { class: 'ocr-totals-input-wrap' },
+                    el('span', { class: 'currency-prefix' }, store.getCurrencySymbol()),
+                    el('input', {
+                        class: 'ocr-totals-input num', type: 'number', step: '0.01',
+                        value: Math.round(_ocrTips * 100) / 100,
+                        onChange: (e) => {
+                            _ocrTips = parseFloat(e.target.value) || 0;
+                            queueMicrotask(() => router.navigate('add-expense'));
+                        }
+                    })
+                )
+            ),
+            el('div', { class: 'ocr-grand-total-wrap' },
+                el('span', { class: 'ocr-grand-total-label' }, 'Grand Total'),
+                el('span', { class: 'ocr-grand-total-val' }, store.formatCurrency(grandTotal))
+            )
+        ),
+
+        el('div', { class: 'ocr-date-row' },
+            el('label', { class: 'form-label' }, 'DATE'),
+            DatePicker({ id: 'ocr-date', value: dateVal, allowFuture: false, onChange: (v) => { _ocrDate = v; } }),
+        ),
+        el('div', { class: 'ocr-action-btns' },
+            el('button', {
+                class: 'submit-btn', type: 'button', id: 'ocr-save-btn',
+                style: 'background: var(--green-accent);',
+                onClick: handleOCRSave,
+            }, 'Save Expense'),
+            el('button', {
+                class: 'submit-btn', type: 'button', id: 'ocr-split-btn',
+                style: 'background: var(--blue-link);',
+                onClick: () => {
+                    const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
+                    _splitItems = _ocrItems.map(i => {
+                        const tipShare = (i.amount / pTotal) * _ocrTips;
+                        const subtotalWithTip = i.amount + i.tax + tipShare;
+                        return { ...i, subtotal: Math.round(subtotalWithTip * 100) / 100 };
+                    });
+                    _splitPeople = ['Me'];
+                    _splitAssignments = {};
+                    _splitItems.forEach((_, idx) => { _splitAssignments[idx] = ['Me']; });
+                    router.navigate('split-expense');
+                },
+            }, 'Split Expense'),
+        ),
+        el('button', {
+            class: 'ocr-clear-btn', type: 'button',
+            onClick: () => {
+                _ocrItems = []; _ocrMerchant = ''; _ocrDate = '';
+                _ocrTotalTax = 0; _ocrTips = 0;
+                _invoiceFile = null; _invoicePreview = null;
+                router.navigate('add-expense');
+            }
+        }, 'Clear & Start Over'),
+    );
+}
+
+async function handleOCRSave() {
+    const btn = document.getElementById('ocr-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    const userId = store.get('userId');
+    const date = _ocrDate || new Date().toISOString().slice(0, 10);
+    try {
+        const items = _ocrItems.map(it => ({
+            description: it.description,
+            amount: it.amount + it.tax,
+            category_id: it.category_id || null,
+            expense_date: date,
+        }));
+        const res = await api.saveOCRItems({ user_id: userId, items });
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#b1cca1', '#45B7D1', '#FF6B6B', '#96CEB4'] });
+        toast.success(res.message || 'Expenses saved!');
+        _ocrItems = []; _ocrMerchant = ''; _ocrDate = '';
+        _invoiceFile = null; _invoicePreview = null;
+        await Promise.all([store.loadExpenses(), store.loadSummary()]);
+        router.navigate('dashboard');
+    } catch (err) {
+        toast.error('Save failed: ' + err.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Expense'; }
+    }
+}
+
+/* ---- Split Expense Screen ---- */
+function renderSplitExpense() {
+    const categories = store.get('categories');
+
+    // Person management
+    const peopleSection = el('div', { class: 'split-people-section' },
+        el('div', { class: 'split-section-title' }, 'People'),
+        el('div', { class: 'split-people-list', id: 'split-people-list' },
+            ..._splitPeople.map((name, idx) =>
+                el('div', { class: 'split-person-chip' + (name === 'Me' ? ' me' : '') },
+                    el('span', {}, name),
+                    name !== 'Me' ? el('button', {
+                        class: 'split-person-remove',
+                        onClick: () => {
+                            _splitPeople.splice(idx, 1);
+                            // Remove from assignments
+                            Object.keys(_splitAssignments).forEach(k => {
+                                _splitAssignments[k] = _splitAssignments[k].filter(p => p !== name);
+                                if (_splitAssignments[k].length === 0) _splitAssignments[k] = ['Me'];
+                            });
+                            router.navigate('split-expense');
+                        }
+                    }, '✕') : null
+                )
+            )
+        ),
+        el('div', { class: 'split-add-person', id: 'split-add-person-row' },
+            el('input', {
+                class: 'form-input', id: 'split-new-person', type: 'text', placeholder: 'Add person name...',
+                onKeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addSplitPerson(); } }
+            }),
+            el('button', { class: 'split-add-btn', type: 'button', onClick: addSplitPerson }, '+')
+        )
+    );
+
+    // Item assignment table
+    const assignRows = _splitItems.map((item, idx) => {
+        const assigned = _splitAssignments[idx] || ['Me'];
+        const perPerson = assigned.length > 0 ? (item.subtotal / assigned.length) : item.subtotal;
+
+        return el('tr', { class: 'split-table-row' },
+            el('td', { class: 'split-cell-desc' }, item.description || `Item ${idx + 1}`),
+            el('td', { class: 'split-cell-amt' }, store.formatCurrency(item.subtotal)),
+            el('td', { class: 'split-cell-assign' },
+                el('details', {
+                    class: 'split-multi-select',
+                    open: _splitOpenDropdownIdx === idx ? 'open' : null,
+                    onToggle: (e) => {
+                        if (e.target.open) {
+                            _splitOpenDropdownIdx = idx;
+                        } else if (_splitOpenDropdownIdx === idx) {
+                            _splitOpenDropdownIdx = null;
+                        }
+                    }
+                },
+                    el('summary', { class: 'split-multi-summary' },
+                        assigned.length === _splitPeople.length ? 'All selected' :
+                            `${assigned.length} person${assigned.length !== 1 ? 's' : ''}`
+                    ),
+                    el('div', { class: 'split-multi-menu' },
+                        el('label', { class: 'split-multi-option select-all-option' },
+                            el('input', {
+                                type: 'checkbox',
+                                checked: assigned.length === _splitPeople.length ? 'checked' : null,
+                                onChange: (e) => {
+                                    if (e.target.checked) {
+                                        _splitAssignments[idx] = [..._splitPeople];
+                                    } else {
+                                        _splitAssignments[idx] = ['Me']; // fallback logic
+                                    }
+                                    queueMicrotask(() => router.navigate('split-expense'));
+                                }
+                            }),
+                            el('span', {}, 'Select All')
+                        ),
+                        ..._splitPeople.map(person => {
+                            const isAssigned = assigned.includes(person);
+                            return el('label', { class: 'split-multi-option' },
+                                el('input', {
+                                    type: 'checkbox',
+                                    checked: isAssigned ? 'checked' : null,
+                                    onChange: (e) => {
+                                        if (e.target.checked) {
+                                            if (!_splitAssignments[idx].includes(person)) _splitAssignments[idx].push(person);
+                                        } else {
+                                            _splitAssignments[idx] = assigned.filter(p => p !== person);
+                                            if (_splitAssignments[idx].length === 0) _splitAssignments[idx] = ['Me'];
+                                        }
+                                        queueMicrotask(() => router.navigate('split-expense'));
+                                    }
+                                }),
+                                el('span', {}, person)
+                            );
+                        })
+                    )
+                ),
+                el('div', { class: 'split-per-person' },
+                    `÷${assigned.length} = ${store.formatCurrency(perPerson)} each`
+                )
+            )
+        );
+    });
+
+    // Calculate each person's total
+    const personTotals = {};
+    _splitPeople.forEach(p => { personTotals[p] = 0; });
+    _splitItems.forEach((item, idx) => {
+        const assigned = _splitAssignments[idx] || ['Me'];
+        const share = assigned.length > 0 ? item.subtotal / assigned.length : 0;
+        assigned.forEach(p => {
+            if (personTotals[p] !== undefined) personTotals[p] += share;
+        });
+    });
+
+    const totalsSection = el('div', { class: 'split-totals-section' },
+        el('div', { class: 'split-section-title' }, 'Split Summary'),
+        el('div', { class: 'split-totals-grid' },
+            ..._splitPeople.map(person =>
+                el('div', { class: 'split-total-card' + (person === 'Me' ? ' me' : '') },
+                    el('div', { class: 'split-total-name' }, person),
+                    el('div', { class: 'split-total-amount' }, store.formatCurrency(personTotals[person] || 0)),
+                )
+            )
+        )
+    );
+
+    return el('div', { class: 'screen add-expense-bg', id: 'split-expense-screen' },
+        SubHeader('Split Expense', 'add-expense'),
+        el('div', { class: 'px-page add-expense-card' },
+            peopleSection,
+            el('div', { class: 'split-table-wrap' },
+                el('table', { class: 'ocr-table split-table' },
+                    el('thead', {},
+                        el('tr', {},
+                            el('th', {}, 'Item'),
+                            el('th', { class: 'ocr-th-num' }, 'Amount'),
+                            el('th', {}, 'Assign To'),
+                        )
+                    ),
+                    el('tbody', {}, ...assignRows),
+                )
+            ),
+            totalsSection,
+            el('div', { class: 'ocr-action-btns', style: 'margin-top: 20px;' },
+                el('button', {
+                    class: 'submit-btn', type: 'button', id: 'split-save-btn',
+                    style: 'background: var(--green-accent);',
+                    onClick: handleSplitSave,
+                }, 'Save Expense (My Share)'),
+            ),
+        ),
+    );
+}
+
+function addSplitPerson() {
+    const input = document.getElementById('split-new-person');
+    const name = input ? input.value.trim() : '';
+    if (!name) return;
+    if (_splitPeople.includes(name)) { toast.error('Person already added'); return; }
+    _splitPeople.push(name);
+    router.navigate('split-expense');
+}
+
+async function handleSplitSave() {
+    const btn = document.getElementById('split-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    const userId = store.get('userId');
+    const date = _ocrDate || new Date().toISOString().slice(0, 10);
+
+    // Calculate 'Me' share for each item
+    const myItems = [];
+    _splitItems.forEach((item, idx) => {
+        const assigned = _splitAssignments[idx] || ['Me'];
+        if (assigned.includes('Me')) {
+            const share = item.subtotal / assigned.length;
+            myItems.push({
+                description: item.description,
+                amount: Math.round(share * 100) / 100,
+                category_id: item.category_id || null,
+                expense_date: date,
+            });
+        }
+    });
+
+    if (myItems.length === 0) {
+        toast.info('No items assigned to you.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Expense (My Share)'; }
+        return;
+    }
+
+    try {
+        const res = await api.saveOCRItems({ user_id: userId, items: myItems });
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#b1cca1', '#45B7D1', '#FF6B6B', '#96CEB4'] });
+        toast.success(`Saved your share: ${myItems.length} item(s)!`);
+        _ocrItems = []; _ocrMerchant = ''; _ocrDate = '';
+        _invoiceFile = null; _invoicePreview = null;
+        _splitItems = []; _splitPeople = ['Me']; _splitAssignments = {};
+        await Promise.all([store.loadExpenses(), store.loadSummary()]);
+        router.navigate('dashboard');
+    } catch (err) {
+        toast.error('Save failed: ' + err.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Expense (My Share)'; }
     }
 }
 
@@ -1470,6 +1953,7 @@ function _applyTxnFilters() {
 router.register('splash', renderSplash);
 router.register('dashboard', renderDashboard);
 router.register('add-expense', renderAddExpense);
+router.register('split-expense', renderSplitExpense);
 router.register('transactions', renderAllTransactions);
 router.register('chatbot', renderChatbot);
 router.register('profile', renderProfile);

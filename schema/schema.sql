@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     user_id     UUID NOT NULL REFERENCES users(user_id),
     amount      NUMERIC(12,2) NOT NULL,
     category_id INTEGER REFERENCES categories(category_id),
+    description TEXT,
     expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
     gmail_msg_id VARCHAR(255) UNIQUE,
     created_at  TIMESTAMPTZ DEFAULT NOW()

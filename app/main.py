@@ -716,6 +716,16 @@ async def ocr_save(body: OCRSaveRequest, request: Request):
 
 if FRONTEND_DIR.exists():
     app.mount("/_assets", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+@app.get("/favicon.png", include_in_schema=False)
+async def serve_favicon():
+    favicon = FRONTEND_DIR / "assets" / "favicon.png"
+    if favicon.exists():
+        return FileResponse(favicon)
+    raise HTTPException(status_code=404)
 
 @app.get("/", include_in_schema=False)
 async def serve_root():

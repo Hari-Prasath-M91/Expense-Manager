@@ -112,7 +112,7 @@ function renderSpendingChart() {
                     const pct = Math.round((c.total / totalAll) * 100);
                     return el('div', { class: 'legend-item' },
                         el('div', { class: 'legend-dot', style: { background: colors[i] } }),
-                        `${c.icon || ''} ${c.category} - ${pct}%`
+                        el('span', { style: 'white-space: nowrap; font-size: 12px;' }, `${c.icon || ''} ${c.category} - ${pct}%`)
                     );
                 })
             ),
@@ -146,11 +146,13 @@ function renderTrendChart() {
         return;
     }
 
-    const labels = trend.map(d => {
+    // Reverse so oldest entries are on right, most recent on left (away from the FAB)
+    const reversedTrend = [...trend].reverse();
+    const labels = reversedTrend.map(d => {
         const dt = new Date(d.expense_date);
         return dt.toLocaleDateString('en-US', { weekday: 'short' });
     });
-    const data = trend.map(d => d.daily_total);
+    const data = reversedTrend.map(d => d.daily_total);
 
     const card = el('div', { class: 'trend-card slide-up' },
         el('div', { class: 'trend-card-title' }, 'Monthly Expense Trend'),
@@ -226,6 +228,13 @@ function renderAIInsight() {
 
 function renderAIAnalysisPage() {
     const recommendations = store.get('recommendations');
+
+    // If we land here directly (e.g. refresh) and haven't loaded recs yet, load them!
+    if (!recommendations && !window._loadingRecs) {
+        window._loadingRecs = true;
+        store.loadRecommendations().finally(() => window._loadingRecs = false);
+    }
+
     const recs = (recommendations && recommendations.recommendations) ? recommendations.recommendations : [];
     const score = (recommendations && recommendations.healthScore) ? recommendations.healthScore : 0;
 
@@ -237,16 +246,17 @@ function renderAIAnalysisPage() {
                     el('svg', { class: 'score-circle', viewBox: '0 0 100 100' },
                         el('circle', { class: 'score-circle-bg', cx: '50', cy: '50', r: '45' }),
                         el('circle', {
+                            id: 'ai-score-progress',
                             class: 'score-circle-progress',
                             cx: '50', cy: '50', r: '45',
                             style: { strokeDashoffset: `${283 - (283 * score / 100)}` }
                         })
                     ),
-                    el('div', { class: 'score-value' }, score)
+                    el('div', { class: 'score-value', id: 'ai-score-value' }, score)
                 ),
                 el('div', { class: 'ai-analysis-hero-text' },
                     el('div', { class: 'hero-title' }, 'Financial Health'),
-                    el('div', { class: 'hero-desc' }, getHealthStatusText(score))
+                    el('div', { class: 'hero-desc', id: 'ai-hero-desc' }, getHealthStatusText(score))
                 )
             ),
 
@@ -262,15 +272,28 @@ function renderAIAnalysisPage() {
 
                         try {
                             await store.loadRecommendations(true);
-                            // Refresh the current AI Analysis screen
-                            const newDiv = renderAIAnalysisPage();
-                            const oldDiv = document.getElementById('ai-analysis-screen');
-                            if (oldDiv && newDiv) {
-                                oldDiv.replaceWith(newDiv);
-                                newDiv.classList.add('active');
+                            const updated = store.get('recommendations');
+                            const newRecs = updated.recommendations || [];
+                            const newScore = updated.healthScore || 0;
+
+                            // Update Score surgically
+                            const progress = document.getElementById('ai-score-progress');
+                            const scoreVal = document.getElementById('ai-score-value');
+                            const heroDesc = document.getElementById('ai-hero-desc');
+
+                            if (progress) progress.style.strokeDashoffset = `${283 - (283 * newScore / 100)}`;
+                            if (scoreVal) scoreVal.textContent = newScore;
+                            if (heroDesc) heroDesc.textContent = getHealthStatusText(newScore);
+
+                            // Update List surgically
+                            const list = document.getElementById('ai-recommendations-list');
+                            if (list) {
+                                list.innerHTML = '';
+                                const cards = renderRecommendationCards(newRecs);
+                                cards.forEach(c => list.appendChild(c));
                             }
 
-                            // Also update the dashboard's summary card if it's in the background
+                            // Also sync dashboard card
                             renderAIInsight();
 
                             toast.success('Analysis updated!');
@@ -287,26 +310,28 @@ function renderAIAnalysisPage() {
                     el('span', {}, 'Refresh')
                 )
             ),
-            el('div', { class: 'rec-full-list stagger-children' },
-                ...recs.map(rec => {
-                    const hasValidAction = isValidRecommendationAction(rec.action);
-                    return el('div', { class: 'rec-full-card' },
-                        el('div', { class: `rec-full-type rec-type-${rec.type}` }, rec.type),
-                        el('div', { class: 'rec-full-title' }, rec.title),
-                        el('div', { class: 'rec-full-body' }, rec.body),
-                        (rec.action && hasValidAction) ? el('button', {
-                            class: 'rec-full-action',
-                            onClick: () => handleRecommendationAction(rec.action)
-                        }, formatActionText(rec.action)) : null
-                    );
-                })
-            ),
-
-            recs.length === 0 ? EmptyState('🤖', 'No recommendations yet', 'Keep tracking your expenses to get personalized insights.') : null
+            el('div', { class: 'rec-full-list stagger-children', id: 'ai-recommendations-list' },
+                ...(recs.length > 0 ? renderRecommendationCards(recs) : [EmptyState('🤖', 'No recommendations yet', 'Keep tracking your expenses to get personalized insights.')])
+            )
         )
     );
 
     return screen;
+}
+
+function renderRecommendationCards(recs) {
+    return recs.map(rec => {
+        const hasValidAction = isValidRecommendationAction(rec.action);
+        return el('div', { class: 'rec-full-card slide-up' },
+            el('div', { class: `rec-full-type rec-type-${rec.type}` }, rec.type),
+            el('div', { class: 'rec-full-title' }, rec.title),
+            el('div', { class: 'rec-full-body' }, rec.body),
+            (rec.action && hasValidAction) ? el('button', {
+                class: 'rec-full-action',
+                onClick: () => handleRecommendationAction(rec.action)
+            }, formatActionText(rec.action)) : null
+        );
+    });
 }
 
 function getHealthStatusText(score) {
@@ -930,13 +955,7 @@ function renderOCRResults(categories, todayStr) {
                     class: 'ocr-cell-input num', type: 'number', step: '0.01', value: item.amount,
                     onChange: (e) => {
                         _ocrItems[idx].amount = parseFloat(e.target.value) || 0;
-                        const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
-                        const tp = (_ocrTotalTax / pTotal) * 100;
-                        _ocrItems.forEach(it => {
-                            const finalTax = it.amount * (tp / 100);
-                            it.tax = Math.round(finalTax * 100) / 100;
-                        });
-                        queueMicrotask(() => router.navigate('add-expense'));
+                        updateOCRSurgical();
                     }
                 })
             ),
@@ -979,11 +998,12 @@ function renderOCRResults(categories, todayStr) {
                                 onChange: (e) => {
                                     const catId = parseInt(e.target.value) || null;
                                     if (catId) {
-                                        _ocrItems.forEach(it => {
+                                        _ocrItems.forEach((it, i) => {
                                             it.category_id = catId;
+                                            const rowSelect = document.querySelectorAll('.ocr-cell-select')[i];
+                                            if (rowSelect) rowSelect.value = catId;
                                         });
-                                        e.target.value = ''; // reset master select
-                                        queueMicrotask(() => router.navigate('add-expense'));
+                                        e.target.value = '';
                                     }
                                 }
                             },
@@ -1002,7 +1022,7 @@ function renderOCRResults(categories, todayStr) {
         el('div', { class: 'ocr-totals-card' },
             el('div', { class: 'ocr-totals-row' },
                 el('span', { class: 'ocr-totals-label' }, 'Pre-Tax Total'),
-                el('span', { class: 'ocr-totals-val' }, store.formatCurrency(preTaxTotal))
+                el('span', { class: 'ocr-totals-val', id: 'ocr-pretax-val' }, store.formatCurrency(preTaxTotal))
             ),
             el('div', { class: 'ocr-totals-row' },
                 el('span', { class: 'ocr-totals-label' }, 'Total Tax'),
@@ -1013,13 +1033,7 @@ function renderOCRResults(categories, todayStr) {
                         value: Math.round(_ocrTotalTax * 100) / 100,
                         onChange: (e) => {
                             _ocrTotalTax = parseFloat(e.target.value) || 0;
-                            const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
-                            const tp = (_ocrTotalTax / pTotal) * 100;
-                            _ocrItems.forEach(it => {
-                                const finalTax = it.amount * (tp / 100);
-                                it.tax = Math.round(finalTax * 100) / 100;
-                            });
-                            queueMicrotask(() => router.navigate('add-expense'));
+                            updateOCRSurgical();
                         }
                     })
                 )
@@ -1033,14 +1047,14 @@ function renderOCRResults(categories, todayStr) {
                         value: Math.round(_ocrTips * 100) / 100,
                         onChange: (e) => {
                             _ocrTips = parseFloat(e.target.value) || 0;
-                            queueMicrotask(() => router.navigate('add-expense'));
+                            updateOCRSurgical();
                         }
                     })
                 )
             ),
             el('div', { class: 'ocr-grand-total-wrap' },
                 el('span', { class: 'ocr-grand-total-label' }, 'Grand Total'),
-                el('span', { class: 'ocr-grand-total-val' }, store.formatCurrency(grandTotal))
+                el('span', { class: 'ocr-grand-total-val', id: 'ocr-grandtotal-val' }, store.formatCurrency(grandTotal))
             )
         ),
 
@@ -1058,15 +1072,33 @@ function renderOCRResults(categories, todayStr) {
                 class: 'submit-btn', type: 'button', id: 'ocr-split-btn',
                 style: 'background: var(--blue-link);',
                 onClick: () => {
-                    const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
-                    _splitItems = _ocrItems.map(i => {
-                        const tipShare = (i.amount / pTotal) * _ocrTips;
-                        const subtotalWithTip = i.amount + i.tax + tipShare;
-                        return { ...i, subtotal: Math.round(subtotalWithTip * 100) / 100 };
-                    });
+                    // Regular items get only amount + tax
+                    _splitItems = _ocrItems.map(i => ({
+                        ...i,
+                        subtotal: Math.round((i.amount + i.tax) * 100) / 100
+                    }));
+
+                    // Tips as a separate item
+                    if (_ocrTips > 0) {
+                        _splitItems.push({
+                            description: 'Tips / Other',
+                            amount: _ocrTips,
+                            tax: 0,
+                            subtotal: _ocrTips,
+                            category_id: null,
+                            isTip: true
+                        });
+                    }
+
                     _splitPeople = ['Me'];
                     _splitAssignments = {};
-                    _splitItems.forEach((_, idx) => { _splitAssignments[idx] = ['Me']; });
+                    _splitItems.forEach((item, idx) => {
+                        if (item.isTip) {
+                            _splitAssignments[idx] = [..._splitPeople];
+                        } else {
+                            _splitAssignments[idx] = ['Me'];
+                        }
+                    });
                     router.navigate('split-expense');
                 },
             }, 'Split Expense'),
@@ -1081,6 +1113,30 @@ function renderOCRResults(categories, todayStr) {
             }
         }, 'Clear & Start Over'),
     );
+}
+
+function updateOCRSurgical() {
+    // Recalculate weights
+    const pTotal = _ocrItems.reduce((s, i) => s + i.amount, 0) || 1;
+    const tp = (_ocrTotalTax / pTotal) * 100;
+
+    _ocrItems.forEach((it, idx) => {
+        const finalTax = it.amount * (tp / 100);
+        it.tax = Math.round(finalTax * 100) / 100;
+
+        // Update Tax column in UI
+        const taxInput = document.querySelectorAll('.ocr-cell-input.num')[idx * 2]; // 1st is tax, 2nd is subtotal
+        if (taxInput) taxInput.value = it.tax;
+    });
+
+    const preTaxTotal = _ocrItems.reduce((s, i) => s + i.amount, 0);
+    const grandTotal = _ocrItems.reduce((s, i) => s + i.amount + i.tax, 0) + _ocrTips;
+
+    // Update Totals Labels
+    const preTaxEl = document.getElementById('ocr-pretax-val');
+    const grandEl = document.getElementById('ocr-grandtotal-val');
+    if (preTaxEl) preTaxEl.textContent = store.formatCurrency(preTaxTotal);
+    if (grandEl) grandEl.textContent = store.formatCurrency(grandTotal);
 }
 
 async function handleOCRSave() {
@@ -1123,10 +1179,13 @@ function renderSplitExpense() {
                         class: 'split-person-remove',
                         onClick: () => {
                             _splitPeople.splice(idx, 1);
-                            // Remove from assignments
+                            // Sync assignments
                             Object.keys(_splitAssignments).forEach(k => {
-                                _splitAssignments[k] = _splitAssignments[k].filter(p => p !== name);
-                                if (_splitAssignments[k].length === 0) _splitAssignments[k] = ['Me'];
+                                if (_splitItems[k]?.isTip) {
+                                    _splitAssignments[k] = [..._splitPeople];
+                                } else {
+                                    _splitAssignments[k] = _splitAssignments[k].filter(p => p !== name);
+                                }
                             });
                             router.navigate('split-expense');
                         }
@@ -1145,66 +1204,79 @@ function renderSplitExpense() {
 
     // Item assignment table
     const assignRows = _splitItems.map((item, idx) => {
-        const assigned = _splitAssignments[idx] || ['Me'];
-        const perPerson = assigned.length > 0 ? (item.subtotal / assigned.length) : item.subtotal;
+        const assigned = _splitAssignments[idx] || [];
+        const perPerson = assigned.length > 0 ? (item.subtotal / assigned.length) : 0;
 
         return el('tr', { class: 'split-table-row' },
-            el('td', { class: 'split-cell-desc' }, item.description || `Item ${idx + 1}`),
+            el('td', { class: 'split-cell-desc' },
+                item.isTip ? el('b', {}, item.description) : (item.description || `Item ${idx + 1}`)
+            ),
             el('td', { class: 'split-cell-amt' }, store.formatCurrency(item.subtotal)),
             el('td', { class: 'split-cell-assign' },
-                el('details', {
-                    class: 'split-multi-select',
-                    open: _splitOpenDropdownIdx === idx ? 'open' : null,
-                    onToggle: (e) => {
-                        if (e.target.open) {
-                            _splitOpenDropdownIdx = idx;
-                        } else if (_splitOpenDropdownIdx === idx) {
-                            _splitOpenDropdownIdx = null;
+                item.isTip ? el('div', { class: 'split-multi-select disabled-tip-select' },
+                    el('summary', { class: 'split-multi-summary tip-dropdown-summary', id: 'split-tip-autolabel' }, `Auto-divided (${_splitPeople.length}ppl)`)
+                ) :
+                    el('details', {
+                        class: 'split-multi-select',
+                        open: _splitOpenDropdownIdx === idx ? 'open' : null,
+                        onToggle: (e) => {
+                            if (e.target.open) {
+                                _splitOpenDropdownIdx = idx;
+                            } else {
+                                if (_splitOpenDropdownIdx === idx) _splitOpenDropdownIdx = null;
+                                updateSplitSurgicalUI();
+                            }
                         }
-                    }
-                },
-                    el('summary', { class: 'split-multi-summary' },
-                        assigned.length === _splitPeople.length ? 'All selected' :
-                            `${assigned.length} person${assigned.length !== 1 ? 's' : ''}`
-                    ),
-                    el('div', { class: 'split-multi-menu' },
-                        el('label', { class: 'split-multi-option select-all-option' },
-                            el('input', {
-                                type: 'checkbox',
-                                checked: assigned.length === _splitPeople.length ? 'checked' : null,
-                                onChange: (e) => {
-                                    if (e.target.checked) {
-                                        _splitAssignments[idx] = [..._splitPeople];
-                                    } else {
-                                        _splitAssignments[idx] = ['Me']; // fallback logic
-                                    }
-                                    queueMicrotask(() => router.navigate('split-expense'));
-                                }
-                            }),
-                            el('span', {}, 'Select All')
+                    },
+                        el('summary', { class: 'split-multi-summary', id: `split-summary-${idx}` },
+                            assigned.length === 0 ? '0 persons' : (
+                                assigned.length === _splitPeople.length ? 'All selected' :
+                                    `${assigned.length} person${assigned.length !== 1 ? 's' : ''}`
+                            )
                         ),
-                        ..._splitPeople.map(person => {
-                            const isAssigned = assigned.includes(person);
-                            return el('label', { class: 'split-multi-option' },
+                        el('div', { class: 'split-multi-menu' },
+                            el('label', { class: 'split-multi-option select-all-option' },
                                 el('input', {
                                     type: 'checkbox',
-                                    checked: isAssigned ? 'checked' : null,
+                                    checked: assigned.length === _splitPeople.length ? 'checked' : null,
                                     onChange: (e) => {
-                                        if (e.target.checked) {
-                                            if (!_splitAssignments[idx].includes(person)) _splitAssignments[idx].push(person);
+                                        const isChecked = e.target.checked;
+                                        if (isChecked) {
+                                            _splitAssignments[idx] = [..._splitPeople];
                                         } else {
-                                            _splitAssignments[idx] = assigned.filter(p => p !== person);
-                                            if (_splitAssignments[idx].length === 0) _splitAssignments[idx] = ['Me'];
+                                            _splitAssignments[idx] = [];
                                         }
-                                        queueMicrotask(() => router.navigate('split-expense'));
+                                        // Manually sync other checkboxes in the same menu without a full reload
+                                        const container = e.target.closest('.split-multi-menu');
+                                        if (container) {
+                                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                                if (cb !== e.target) cb.checked = isChecked;
+                                            });
+                                        }
                                     }
                                 }),
-                                el('span', {}, person)
-                            );
-                        })
-                    )
-                ),
-                el('div', { class: 'split-per-person' },
+                                el('span', {}, 'Select All')
+                            ),
+                            ..._splitPeople.map(person => {
+                                const isAssigned = assigned.includes(person);
+                                return el('label', { class: 'split-multi-option' },
+                                    el('input', {
+                                        type: 'checkbox',
+                                        checked: isAssigned ? 'checked' : null,
+                                        onChange: (e) => {
+                                            if (e.target.checked) {
+                                                if (!_splitAssignments[idx].includes(person)) _splitAssignments[idx].push(person);
+                                            } else {
+                                                _splitAssignments[idx] = _splitAssignments[idx].filter(p => p !== person);
+                                            }
+                                        }
+                                    }),
+                                    el('span', {}, person)
+                                );
+                            })
+                        )
+                    ),
+                el('div', { class: 'split-per-person', id: `split-per-person-${idx}` },
                     `÷${assigned.length} = ${store.formatCurrency(perPerson)} each`
                 )
             )
@@ -1215,7 +1287,7 @@ function renderSplitExpense() {
     const personTotals = {};
     _splitPeople.forEach(p => { personTotals[p] = 0; });
     _splitItems.forEach((item, idx) => {
-        const assigned = _splitAssignments[idx] || ['Me'];
+        const assigned = _splitAssignments[idx] || [];
         const share = assigned.length > 0 ? item.subtotal / assigned.length : 0;
         assigned.forEach(p => {
             if (personTotals[p] !== undefined) personTotals[p] += share;
@@ -1224,7 +1296,7 @@ function renderSplitExpense() {
 
     const totalsSection = el('div', { class: 'split-totals-section' },
         el('div', { class: 'split-section-title' }, 'Split Summary'),
-        el('div', { class: 'split-totals-grid' },
+        el('div', { class: 'split-totals-grid', id: 'split-totals-grid' },
             ..._splitPeople.map(person =>
                 el('div', { class: 'split-total-card' + (person === 'Me' ? ' me' : '') },
                     el('div', { class: 'split-total-name' }, person),
@@ -1262,12 +1334,62 @@ function renderSplitExpense() {
     );
 }
 
+function updateSplitSurgicalUI() {
+    _splitItems.forEach((item, idx) => {
+        const assigned = _splitAssignments[idx] || [];
+        const perPerson = assigned.length > 0 ? (item.subtotal / assigned.length) : 0;
+
+        // Update Assignment Summary Label
+        const summary = document.getElementById(`split-summary-${idx}`);
+        if (summary) {
+            summary.textContent = assigned.length === 0 ? '0 persons' :
+                (assigned.length === _splitPeople.length ? 'All selected' :
+                    `${assigned.length} person${assigned.length !== 1 ? 's' : ''}`);
+        }
+
+        // Update Per-Person Row Label
+        const perPersonEl = document.getElementById(`split-per-person-${idx}`);
+        if (perPersonEl) {
+            perPersonEl.textContent = `÷${assigned.length} = ${store.formatCurrency(perPerson)} each`;
+        }
+    });
+
+    // Update Tip labels if they exist
+    const tipLabel = document.getElementById('split-tip-autolabel');
+    if (tipLabel) tipLabel.textContent = `Auto-divided (${_splitPeople.length}ppl)`;
+
+    // Calculate each person's total
+    const personTotals = {};
+    _splitPeople.forEach(p => { personTotals[p] = 0; });
+    _splitItems.forEach((item, idx) => {
+        const assigned = _splitAssignments[idx] || [];
+        const share = assigned.length > 0 ? item.subtotal / assigned.length : 0;
+        assigned.forEach(p => {
+            if (personTotals[p] !== undefined) personTotals[p] += share;
+        });
+    });
+
+    // Update Totals Cards
+    _splitPeople.forEach((person, idx) => {
+        const cards = document.querySelectorAll('.split-totals-grid .split-total-amount');
+        if (cards[idx]) {
+            cards[idx].textContent = store.formatCurrency(personTotals[person] || 0);
+        }
+    });
+}
+
 function addSplitPerson() {
     const input = document.getElementById('split-new-person');
     const name = input ? input.value.trim() : '';
     if (!name) return;
     if (_splitPeople.includes(name)) { toast.error('Person already added'); return; }
     _splitPeople.push(name);
+    // Sync Tip assignments to include EVERYONE
+    _splitItems.forEach((item, idx) => {
+        if (item.isTip) {
+            _splitAssignments[idx] = [..._splitPeople];
+        }
+    });
     router.navigate('split-expense');
 }
 
@@ -1281,7 +1403,7 @@ async function handleSplitSave() {
     // Calculate 'Me' share for each item
     const myItems = [];
     _splitItems.forEach((item, idx) => {
-        const assigned = _splitAssignments[idx] || ['Me'];
+        const assigned = _splitAssignments[idx] || [];
         if (assigned.includes('Me')) {
             const share = item.subtotal / assigned.length;
             myItems.push({
@@ -1605,7 +1727,7 @@ function renderEditProfile() {
     );
 
     return el('div', { class: 'screen add-expense-bg', id: 'edit-profile-screen' },
-        SubHeader('Edit Profile', 'profile'),
+        SubHeader('Edit Profile', 'profile', true),
         el('div', { class: 'px-page add-expense-card' },
             formContent
         ),
@@ -1620,7 +1742,7 @@ function renderChangeCurrency() {
     }
 
     const container = el('div', { class: 'screen add-expense-bg', id: 'change-currency-screen' },
-        SubHeader('Currency', 'profile'),
+        SubHeader('Currency', 'profile', true),
         el('div', { class: 'px-page add-expense-card', id: 'curr-card' },
             el('div', { style: 'padding: 40px; text-align: center;' }, LoadingSpinner('Loading...'))
         ),
@@ -2169,7 +2291,11 @@ function GlobalChatFab() {
         id: 'global-chat-fab',
         style: { display: 'none' }, // Start hidden
         onClick: () => router.navigate('chatbot')
-    }, svg(icons.chat, 28, 28));
+    }, el('img', {
+        src: '/assets/chatbot-icon.png',
+        alt: 'Chatbot',
+        class: 'chatbot-fab-img'
+    }));
 
     store.subscribe((key) => {
         if (key === 'currentScreen') {
@@ -2193,14 +2319,111 @@ function GlobalChatFab() {
             appContainer.appendChild(GlobalChatFab());
         }
 
+        // --- GLOBAL REACTIVE SUBSCRIBER ---
+        // This ensures ANY data change (from store.loadX) triggers a surgical UI update
+        // instead of a full router.navigate blink.
+        store.subscribe((key) => {
+            const current = router.getCurrentScreen();
+
+            // Only trigger updates for data-related keys
+            const dataKeys = ['expenses', 'summary', 'budgets', 'recommendations', 'user'];
+            if (dataKeys.includes(key)) {
+                // router.navigate already handles surgical updates via window.updateXSurgical
+                // so we just call it to trigger the logic.
+                router.navigate(current);
+            }
+        });
+
         await store.loadCategories();
-        if (user) {
-            router.navigate('dashboard');
-        } else {
-            router.navigate('splash');
-        }
+
+        // Restore from URL hash if present (e.g. user bookmarked a screen or refreshed)
+        const hashScreen = window.location.hash.replace('#', '');
+        const targetScreen = (hashScreen && router._routes[hashScreen] && user)
+            ? hashScreen
+            : (user ? 'dashboard' : 'splash');
+
+        router.navigate(targetScreen, { replace: true });
     } catch (e) {
         console.warn('Init failed:', e);
-        router.navigate('splash');
+        router.navigate('splash', { replace: true });
     }
 })();
+
+/* ============================================================
+   SURGICAL UPDATE FUNCTIONS
+   These functions allow updating specific screen parts without re-rendering the whole screen.
+   The router calls these automatically when navigate is called for the current screen.
+   ============================================================ */
+
+window.updateDashboardSurgical = function () {
+    console.log('[App] Surgical update: Dashboard');
+    renderAIInsight();
+    renderRecentTransactions();
+    renderSpendingChart();
+    renderTrendChart();
+
+    // Update BalanceCard
+    const balanceNode = document.querySelector('.balance-card');
+    if (balanceNode) {
+        const newNode = BalanceCard();
+        balanceNode.replaceWith(newNode);
+    }
+}
+
+window.updateTransactionsSurgical = function () {
+    console.log('[App] Surgical update: Transactions');
+    if (typeof _applyTxnFilters === 'function') {
+        _applyTxnFilters();
+    }
+}
+
+window.updateAiAnalysisSurgical = function () {
+    console.log('[App] Surgical update: AI Analysis');
+    const updated = store.get('recommendations');
+    if (!updated) return;
+
+    const newRecs = updated.recommendations || [];
+    const newScore = updated.healthScore || 0;
+
+    // Update Score surgically
+    const progress = document.getElementById('ai-score-progress');
+    const scoreVal = document.getElementById('ai-score-value');
+    const heroDesc = document.getElementById('ai-hero-desc');
+
+    if (progress) progress.style.strokeDashoffset = `${283 - (283 * newScore / 100)}`;
+    if (scoreVal) scoreVal.textContent = newScore;
+    if (heroDesc) {
+        // Find getHealthStatusText - normally accessible since it's in app.js
+        if (typeof getHealthStatusText === 'function') {
+            heroDesc.textContent = getHealthStatusText(newScore);
+        }
+    }
+
+    // Update List surgically
+    const list = document.getElementById('ai-recommendations-list');
+    if (list) {
+        list.innerHTML = '';
+        if (newRecs.length > 0) {
+            if (typeof renderRecommendationCards === 'function') {
+                const cards = renderRecommendationCards(newRecs);
+                cards.forEach(c => list.appendChild(c));
+            }
+        } else {
+            list.appendChild(EmptyState('🤖', 'No recommendations yet', 'Keep tracking your expenses to get personalized insights.'));
+        }
+    }
+}
+
+window.updateProfileSurgical = function () {
+    console.log('[App] Surgical update: Profile');
+    // If we're on profile, a full re-render is usually fast since it's mostly static,
+    // but we can at least refresh the name/avatar cards if specific info changed.
+    // For now, let's allow it to be handled via the existing Router -> Navigate logic
+    // but we define the function to satisfy the router's check.
+}
+
+window.updateBudgetSurgical = function () {
+    console.log('[App] Surgical update: Budget');
+    // Reload budgets list from current DOM or just refresh the whole thing
+    // Since budgets are small lists, we usually just re-navigate.
+}

@@ -73,7 +73,9 @@ function DashboardHeader() {
     );
 }
 
-function SubHeader(title, backTo = 'dashboard') {
+function SubHeader(title, backTo = 'dashboard', showBack = false) {
+    const isMenu = !showBack;
+
     return el('div', { class: 'sub-header' },
         el('div', { class: 'sub-header-bg' }),
         el('div', { class: 'header-circles' },
@@ -82,7 +84,9 @@ function SubHeader(title, backTo = 'dashboard') {
             el('div', { class: 'header-circle' }),
         ),
         el('div', { class: 'sub-header-content' },
-            el('button', { class: 'sub-header-back', onClick: () => router.navigate(backTo) }, svg(icons.back, 24, 24)),
+            isMenu
+                ? el('button', { class: 'sub-header-back', onClick: () => store.set('sidebarOpen', true) }, svg(icons.menu, 28, 28))
+                : el('button', { class: 'sub-header-back', onClick: () => router.navigate(backTo) }, svg(icons.back, 24, 24)),
             el('span', { class: 'sub-header-title' }, title),
         ),
     );

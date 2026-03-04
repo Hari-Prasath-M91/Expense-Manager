@@ -18,7 +18,7 @@
         // When served from FastAPI, assets are at /_assets/
         // When served locally (npx serve), assets are relative
         window.__assetBase = (window.location.port === '3000' || window.location.protocol === 'file:') ? '' : '/_assets/';
-        document.write('<link rel="stylesheet" href="' + window.__assetBase + 'styles.css">');
+        document.write('<link rel="stylesheet" href="' + window.__assetBase + 'styles.css?v=' + Date.now() + '">');
     </script>
 </head>
 

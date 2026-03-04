@@ -47,10 +47,7 @@ function renderDashboard() {
     const loadingOverlay = el('div', { class: 'loading-overlay' }, LoadingSpinner('Crafting your dashboard...'));
     screen.appendChild(loadingOverlay);
 
-    // Ensure sidebar exists
-    if (!document.getElementById('sidebar-root')) {
-        document.getElementById('app').appendChild(Sidebar());
-    }
+
 
     setTimeout(async () => {
         try {
@@ -243,15 +240,10 @@ function renderAIAnalysisPage() {
         el('div', { class: 'px-page' },
             el('div', { class: 'ai-analysis-hero slide-up' },
                 el('div', { class: 'ai-analysis-score-wrap' },
-                    el('svg', { class: 'score-circle', viewBox: '0 0 100 100' },
-                        el('circle', { class: 'score-circle-bg', cx: '50', cy: '50', r: '45' }),
-                        el('circle', {
-                            id: 'ai-score-progress',
-                            class: 'score-circle-progress',
-                            cx: '50', cy: '50', r: '45',
-                            style: { strokeDashoffset: `${283 - (283 * score / 100)}` }
-                        })
-                    ),
+                    svg(`<svg class="score-circle" viewBox="0 0 100 100">
+                        <circle class="score-circle-bg" cx="50" cy="50" r="45"></circle>
+                        <circle id="ai-score-progress" class="score-circle-progress" cx="50" cy="50" r="45" style="stroke-dashoffset: ${283 - (283 * score / 100)}"></circle>
+                    </svg>`, '100%', '100%'),
                     el('div', { class: 'score-value', id: 'ai-score-value' }, score)
                 ),
                 el('div', { class: 'ai-analysis-hero-text' },
@@ -2317,6 +2309,10 @@ function GlobalChatFab() {
         const appContainer = document.getElementById('app');
         if (appContainer) {
             appContainer.appendChild(GlobalChatFab());
+            // Ensure sidebar exists globally if user is logged in
+            if (user && !document.getElementById('sidebar-root')) {
+                appContainer.appendChild(Sidebar());
+            }
         }
 
         // --- GLOBAL REACTIVE SUBSCRIBER ---

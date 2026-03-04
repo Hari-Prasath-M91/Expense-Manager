@@ -485,7 +485,7 @@ body {
     left: 0;
     right: 0;
     height: 100%;
-    background: #b4cfb0;
+    background: linear-gradient(135deg, #b1cca1 0%, #a4c092 100%);
     z-index: 0;
 }
 
@@ -521,13 +521,13 @@ body {
 .sub-header-back svg {
     width: 24px;
     height: 24px;
-    fill: #fff;
+    fill: #2d4d3a;
 }
 
 .sub-header-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+    color: #2d4d3a;
     flex: 1;
 }
 
@@ -849,66 +849,55 @@ body {
 }
 
 .ai-analysis-hero {
-    background: var(--bg-white);
-    border-radius: var(--radius-2xl);
-    padding: 30px 24px;
-    margin-top: 20px;
+    background: var(--green-accent);
+    border-radius: 999px;
+    padding: 28px 32px;
+    margin: 32px 16px 20px 16px;
     display: flex;
     align-items: center;
+    text-align: left;
     gap: 24px;
     box-shadow: var(--shadow-sm);
 }
 
 .ai-analysis-score-wrap {
     position: relative;
-    width: 90px;
-    height: 90px;
     flex-shrink: 0;
-}
-
-.score-circle {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-}
-
-.score-circle-bg {
-    fill: none;
-    stroke: var(--bg-light);
-    stroke-width: 8;
-}
-
-.score-circle-progress {
-    fill: none;
-    stroke: var(--green-accent);
-    stroke-width: 8;
-    stroke-linecap: round;
-    stroke-dasharray: 283;
-    /* 2 * PI * 45 */
-    transition: stroke-dashoffset 1s ease-out;
-}
-
-.score-value {
-    position: absolute;
-    inset: 0;
+    width: auto;
+    height: auto;
+    background: transparent;
+    border-radius: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    font-weight: 800;
-    color: var(--text-dark);
+    box-shadow: none;
+}
+
+/* Hide the SVG ring — replaced by oval */
+.score-circle,
+.score-circle-bg,
+.score-circle-progress {
+    display: none;
+}
+
+.score-value {
+    position: static;
+    font-size: 44px;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1;
 }
 
 .hero-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 800;
-    color: var(--text-dark);
+    color: #fff;
 }
 
 .hero-desc {
-    font-size: 14px;
-    color: var(--text-mid);
-    margin-top: 6px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 5px;
     line-height: 1.4;
 }
 
@@ -1846,7 +1835,7 @@ select.form-input {
 
 /* ---- Add Expense Layout (Figma Match) ---- */
 .add-expense-bg {
-    background: linear-gradient(180deg, #A8C9A3 0%, #D4E2D2 30%, #F5F7FA 100%) !important;
+    background: #F5F7FA 100%;
 }
 
 .add-expense-card {
@@ -3881,15 +3870,28 @@ body.dark-mode .loading-overlay {
 
 /* ---- AI ANALYSIS HERO ---- */
 .ai-analysis-hero {
-    margin: 0 -20px 24px;
-    padding: 30px 24px;
-    background: linear-gradient(135deg, #46a36c 0%, #348a56 100%);
-    border-radius: 0 0 32px 32px;
+    margin: 16px 0 24px;
+    padding: 32px 28px;
+    background: linear-gradient(135deg, #46a36c 0%, #2d7048 100%);
+    border-radius: 40px;
     display: flex;
     align-items: center;
     gap: 24px;
     color: #fff;
-    box-shadow: 0 10px 20px rgba(70, 163, 108, 0.2);
+    box-shadow: 0 12px 24px rgba(70, 163, 108, 0.25);
+    position: relative;
+    overflow: hidden;
+}
+
+.ai-analysis-hero::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 .ai-analysis-score-wrap {
@@ -3908,7 +3910,7 @@ body.dark-mode .loading-overlay {
 .score-circle-bg {
     fill: none;
     stroke: rgba(255, 255, 255, 0.15);
-    stroke-width: 8;
+    stroke-width: 6;
 }
 
 .score-circle-progress {
@@ -3917,7 +3919,8 @@ body.dark-mode .loading-overlay {
     stroke-width: 8;
     stroke-linecap: round;
     stroke-dasharray: 283;
-    transition: stroke-dashoffset 1s ease-out;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
 }
 
 .score-value {
@@ -3926,22 +3929,25 @@ body.dark-mode .loading-overlay {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 800;
     color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .hero-title {
     font-size: 22px;
     font-weight: 800;
     color: #fff;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
 }
 
 .hero-desc {
-    font-size: 15px;
+    font-size: 14px;
     color: rgba(255, 255, 255, 0.9);
-    line-height: 1.4;
+    line-height: 1.5;
+    font-weight: 500;
 }
 
 /* ---- MOBILE RESPONSIVENESS (Refined) ---- */
@@ -4005,13 +4011,15 @@ body.dark-mode .loading-overlay {
     }
 
     .ai-analysis-hero {
-        padding: 24px 20px;
+        padding: 24px 22px;
         gap: 16px;
+        margin: 12px 0 20px;
+        border-radius: 32px;
     }
 
     .ai-analysis-score-wrap {
-        width: 70px;
-        height: 70px;
+        width: 60px;
+        height: 60px;
     }
 
     .score-value {

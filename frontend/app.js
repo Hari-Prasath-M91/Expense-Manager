@@ -43,19 +43,29 @@ function renderDashboard() {
         ),
     );
 
+    // Transparent loading overlay to see the dashboard behind it
+    const loadingOverlay = el('div', { class: 'loading-overlay' }, LoadingSpinner('Crafting your dashboard...'));
+    screen.appendChild(loadingOverlay);
+
     // Ensure sidebar exists
     if (!document.getElementById('sidebar-root')) {
         document.getElementById('app').appendChild(Sidebar());
     }
 
     setTimeout(async () => {
-        await Promise.all([
-            store.loadExpenses(),
-            store.loadSummary(),
-            store.loadCategories(),
-            store.loadBudgets(),
-            store.loadRecommendations()
-        ]);
+        try {
+            await Promise.all([
+                store.loadExpenses(),
+                store.loadSummary(),
+                store.loadCategories(),
+                store.loadBudgets(),
+                store.loadRecommendations()
+            ]);
+        } finally {
+            loadingOverlay.classList.add('slide-out-left');
+            setTimeout(() => loadingOverlay.remove(), 400);
+        }
+
         renderSpendingChart();
         renderTrendChart();
         renderAIInsight();
@@ -240,7 +250,43 @@ function renderAIAnalysisPage() {
                 )
             ),
 
-            el('div', { class: 'rec-list-header' }, 'Key Recommendations'),
+            el('div', { class: 'rec-list-header', style: 'display: flex; justify-content: space-between; align-items: center;' },
+                el('span', {}, 'Key Recommendations'),
+                el('button', {
+                    class: 'refresh-btn',
+                    onClick: async (e) => {
+                        const btn = e.currentTarget;
+                        const originalHtml = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.innerHTML = 'Refining...';
+
+                        try {
+                            await store.loadRecommendations(true);
+                            // Refresh the current AI Analysis screen
+                            const newDiv = renderAIAnalysisPage();
+                            const oldDiv = document.getElementById('ai-analysis-screen');
+                            if (oldDiv && newDiv) {
+                                oldDiv.replaceWith(newDiv);
+                                newDiv.classList.add('active');
+                            }
+
+                            // Also update the dashboard's summary card if it's in the background
+                            renderAIInsight();
+
+                            toast.success('Analysis updated!');
+                        } catch (err) {
+                            console.error('Refresh failed:', err);
+                            toast.error('AI Service is busy, try again in a moment');
+                        } finally {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHtml;
+                        }
+                    }
+                },
+                    el('span', { style: 'font-size: 14px;' }, '🔄'),
+                    el('span', {}, 'Refresh')
+                )
+            ),
             el('div', { class: 'rec-full-list stagger-children' },
                 ...recs.map(rec => {
                     const hasValidAction = isValidRecommendationAction(rec.action);
@@ -276,7 +322,6 @@ function handleRecommendationAction(action) {
     if (act.includes('budget')) router.navigate('budget');
     else if (act.includes('add')) router.navigate('add-expense');
     else if (act.includes('transaction') || act.includes('expense')) router.navigate('transactions');
-    else if (act.includes('profile')) router.navigate('profile');
 }
 
 function isValidRecommendationAction(action) {
@@ -285,9 +330,7 @@ function isValidRecommendationAction(action) {
     return act.includes('budget') ||
         act.includes('add') ||
         act.includes('transaction') ||
-        act.includes('expense') ||
-        act.includes('profile') ||
-        act.includes('saving');
+        act.includes('expense');
 }
 
 function formatActionText(text) {
@@ -1759,24 +1802,49 @@ function handleBudgetSetup(e) {
     });
 }
 
-function renderBudgetSetupForm(container) {
+function renderBudgetSetupForm(container, initialBudgets = []) {
     const cats = store.get('categories');
+    const totalBudgetObj = initialBudgets.find(b => !b.category_id);
+    const totalValue = totalBudgetObj ? totalBudgetObj.amount : '';
+
     container.appendChild(el('div', { class: 'budget-setup-card slide-up' },
-        el('h3', { class: 'budget-setup-title' }, 'Set Your Budgets'),
-        el('p', { class: 'budget-setup-subtitle' }, 'Enter your monthly budget and limits for each category to get started.'),
+        el('h3', { class: 'budget-setup-title' }, initialBudgets.length > 0 ? 'Edit Your Budgets' : 'Set Your Budgets'),
+        el('p', { class: 'budget-setup-subtitle' }, 'Enter your monthly budget and limits for each category.'),
         el('form', { class: 'budget-setup-form', onSubmit: handleBudgetSetup },
             el('div', { class: 'form-group' },
                 el('label', { class: 'form-label' }, `Total Monthly Budget (${store.getCurrencySymbol()})`),
-                el('input', { class: 'form-input', name: 'total', type: 'number', required: 'true', min: '1' }),
+                el('input', { class: 'form-input', name: 'total', type: 'number', required: 'true', min: '1', value: totalValue }),
             ),
             el('h4', { style: 'margin-top: 20px; color: #8c9b9d;' }, 'Category Limits'),
-            ...cats.map(c =>
-                el('div', { class: 'form-group' },
+            ...cats.map(c => {
+                const catBudget = initialBudgets.find(b => b.category_id === c.category_id);
+                const catValue = catBudget ? catBudget.amount : '';
+                return el('div', { class: 'form-group' },
                     el('label', { class: 'form-label' }, `${c.icon} ${c.name} Limit (${store.getCurrencySymbol()})`),
-                    el('input', { class: 'form-input', name: `cat_${c.category_id}`, type: 'number', required: 'true', min: '0' }),
-                )
-            ),
-            el('button', { class: 'submit-btn', type: 'submit' }, 'Save Budgets')
+                    el('input', { class: 'form-input', name: `cat_${c.category_id}`, type: 'number', required: 'true', min: '0', value: catValue }),
+                );
+            }),
+            el('div', { class: 'btn-group' },
+                el('button', { class: 'submit-btn flex-1', type: 'submit' }, 'Save Budgets'),
+                initialBudgets.length > 0 ? el('button', {
+                    class: 'btn-outline btn-danger-outline flex-1',
+                    type: 'button',
+                    onClick: async () => {
+                        if (confirm('Are you sure you want to reset all budgets for this month?')) {
+                            const d = new Date();
+                            const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            await store.resetBudgets(m);
+                            toast.success('Budgets reset');
+                            renderBudgetContent();
+                        }
+                    }
+                }, 'Reset') : null,
+                initialBudgets.length > 0 ? el('button', {
+                    class: 'btn-outline flex-1',
+                    type: 'button',
+                    onClick: () => renderBudgetContent()
+                }, 'Cancel') : null
+            )
         )
     ));
 }
@@ -1867,6 +1935,20 @@ function renderBudgetContent() {
     });
 
     container.appendChild(breakdownCard);
+
+    // Add Edit Button
+    container.appendChild(el('div', { class: 'px-page slide-up', style: 'margin-top: 24px;' },
+        el('button', {
+            class: 'submit-btn',
+            onClick: () => {
+                container.innerHTML = '';
+                renderBudgetSetupForm(container, budgets);
+            }
+        },
+            el('span', {}, '✏️'),
+            el('span', { style: 'margin-left: 8px;' }, 'Edit Budgets')
+        )
+    ));
 }
 
 /* ---- All Transactions Page ---- */
@@ -2081,9 +2163,36 @@ router.register('change-currency', renderChangeCurrency);
 router.register('budget', renderBudget);
 router.register('ai-analysis', renderAIAnalysisPage);
 
+function GlobalChatFab() {
+    const fab = el('button', {
+        class: 'chatbot-fab',
+        id: 'global-chat-fab',
+        style: { display: 'none' }, // Start hidden
+        onClick: () => router.navigate('chatbot')
+    }, svg(icons.chat, 28, 28));
+
+    store.subscribe((key) => {
+        if (key === 'currentScreen') {
+            const screen = store.get('currentScreen');
+            // Show ONLY on the dashboard
+            const shouldShow = screen === 'dashboard';
+            fab.style.display = shouldShow ? 'flex' : 'none';
+        }
+    });
+
+    return fab;
+}
+
 (async function init() {
     try {
         const user = await store.initUser();
+
+        // Add global persistent UI elements to #app
+        const appContainer = document.getElementById('app');
+        if (appContainer) {
+            appContainer.appendChild(GlobalChatFab());
+        }
+
         await store.loadCategories();
         if (user) {
             router.navigate('dashboard');

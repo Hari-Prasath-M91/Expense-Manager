@@ -188,38 +188,14 @@ const store = {
         }
     },
 
-    async loadRecommendations() {
+    async loadRecommendations(refresh = false) {
         const userId = this.get('userId');
         if (!userId) return;
 
-        // 1. Check Cache (Once per day)
-        const cacheKey = `ai_rec_cache_${userId}`;
-        const cached = localStorage.getItem(cacheKey);
-        const today = new Date().toISOString().split('T')[0];
-
-        if (cached) {
-            try {
-                const { date, data } = JSON.parse(cached);
-                if (date === today && data && !data.error) {
-                    this.set('recommendations', data);
-                    return; // Use cached data
-                }
-            } catch (e) {
-                localStorage.removeItem(cacheKey);
-            }
-        }
-
-        // 2. Fetch Fresh Data
         this.setLoading('recommendations', true);
         try {
-            const data = await api.aiRecommendations(userId);
-            if (data && !data.error) {
-                this.set('recommendations', data);
-                // Save to cache
-                localStorage.setItem(cacheKey, JSON.stringify({ date: today, data }));
-            } else {
-                this.set('recommendations', data);
-            }
+            const data = await api.aiRecommendations(userId, refresh);
+            this.set('recommendations', data);
         } catch (e) {
             console.error('Failed to load recommendations:', e);
         } finally {
@@ -271,6 +247,20 @@ const store = {
             throw e;
         } finally {
             this.setLoading('addBudget', false);
+        }
+    },
+
+    async resetBudgets(month) {
+        this.setLoading('resetBudgets', true);
+        try {
+            const userId = this.get('userId');
+            await api.deleteBudgets(userId, month);
+            await this.loadBudgets();
+        } catch (e) {
+            console.error('Failed to reset budgets:', e);
+            throw e;
+        } finally {
+            this.setLoading('resetBudgets', false);
         }
     },
 

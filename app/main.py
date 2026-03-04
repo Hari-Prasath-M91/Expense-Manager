@@ -57,7 +57,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=settings.secret_key,
+    same_site="lax",  # Ensure cookies work across Google redirects
+    https_only=False  # Allow http locally
+)
 
 # OAuth Setup
 oauth = OAuth()
@@ -125,6 +130,9 @@ async def auth_callback(request: Request):
     try:
         token = await oauth.google.authorize_access_token(request)
     except Exception as e:
+        print(f"OAuth Callback Error: {str(e)}")
+        # If redirect_uri is the issue, print what we expected vs what we got
+        print(f"Request URL: {request.url}")
         raise HTTPException(400, f"OAuth error: {e}")
 
     user_info = token.get('userinfo')
@@ -385,6 +393,17 @@ async def get_budgets(user_id: str, request: Request, month: str | None = None):
     return {"total": len(rows), "budgets": [dict(r) for r in rows]}
 
 
+@app.delete("/budgets/{user_id}", tags=["Budgets"])
+async def delete_budgets(user_id: str, request: Request, month: str):
+    """Delete all budgets for a user for a specific month."""
+    db = _db(request)
+    await db.execute(
+        "DELETE FROM budgets WHERE user_id = $1 AND month = $2",
+        uuid.UUID(user_id), month
+    )
+    return {"status": "success"}
+
+
 # ===========================================================================
 # Analytics (simple summary)
 # ===========================================================================
@@ -445,7 +464,7 @@ async def spending_summary(user_id: str, request: Request, start_date: str | Non
 
 
 @app.get("/analytics/recommendations/{user_id}", tags=["Analytics"])
-async def ai_recommendations(user_id: str, request: Request):
+async def ai_recommendations(user_id: str, request: Request, refresh: bool = False):
     """Get personalized AI recommendations for the user."""
     db = _db(request)
     api_key = settings.cerebras_api_key or os.getenv("CEREBRAS_API_KEY", "")
@@ -453,7 +472,7 @@ async def ai_recommendations(user_id: str, request: Request):
         raise HTTPException(500, "CEREBRAS_API_KEY not set")
     
     try:
-        recommendations = await get_ai_recommendations(db, user_id, api_key)
+        recommendations = await get_ai_recommendations(db, user_id, api_key, force_refresh=refresh)
         return recommendations
     except Exception as e:
         raise HTTPException(500, str(e))

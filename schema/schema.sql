@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS budgets (
     UNIQUE(user_id, category_id, month)
 );
 
+-- AI Recommendation Cache (Server-side)
+CREATE TABLE IF NOT EXISTS ai_recommendation_cache (
+    user_id     UUID PRIMARY KEY REFERENCES users(user_id),
+    cache_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+    recommendation_data JSONB NOT NULL,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Seed default categories
 INSERT INTO categories (name, icon, color) VALUES
     ('Food',           '🍔', '#FF6B6B'),

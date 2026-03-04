@@ -76,6 +76,9 @@ const api = {
         const q = month ? `?month=${month}` : '';
         return this.get(`/budgets/${userId}${q}`);
     },
+    deleteBudgets(userId, month) {
+        return this.del(`/budgets/${userId}?month=${month}`);
+    },
 
     // Analytics
     spendingSummary(userId, startDate, endDate) {
@@ -88,8 +91,9 @@ const api = {
         }
         return this.get(`/analytics/summary/${userId}${q}`);
     },
-    aiRecommendations(userId) {
-        return this.get(`/analytics/recommendations/${userId}`);
+    aiRecommendations(userId, refresh = false) {
+        const q = refresh ? '?refresh=true' : '';
+        return this.get(`/analytics/recommendations/${userId}${q}`);
     },
 
     // Gmail Sync

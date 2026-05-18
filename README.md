@@ -1,6 +1,6 @@
 # 💰 Expense Manager
 
-A simple way to track where your money goes. Built with **FastAPI** on the backend and plain **Javascript/CSS** on the front. It uses **Cerebras (Llama 3.3)** to do the heavy lifting like reading emails and chatting about your spending.
+A simple way to track where your money goes. Built with **FastAPI** on the backend and plain **Javascript/CSS** on the front. It uses **Cerebras (GPT-OSS120b)** to do the heavy lifting like reading emails and chatting about your spending.
 
 ## What it actually does
 

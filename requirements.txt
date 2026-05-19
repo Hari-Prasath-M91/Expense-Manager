@@ -8,4 +8,7 @@ cerebras-cloud-sdk
 authlib
 httpx
 itsdangerous
+pytesseract
+opencv-python-headless
+Pillow
 python-multipart

@@ -2825,6 +2825,314 @@ select.form-input {
     margin-top: 10px;
 }
 
+/* ============================================================
+   OCR RESULTS TABLE
+   ============================================================ */
+.ocr-results-container {
+    padding: 0;
+}
+
+.ocr-merchant-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-dark);
+    padding: 8px 0 12px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 12px;
+}
+
+.ocr-table-wrap {
+    overflow-x: auto;
+    margin: 0 -16px;
+    padding: 0 16px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ocr-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    min-width: 460px;
+}
+
+.ocr-table thead th {
+    background: linear-gradient(135deg, #b4cfb0, #a3c29e);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 8px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.ocr-table thead th:first-child {
+    border-radius: 10px 0 0 0;
+}
+
+.ocr-table thead th:last-child {
+    border-radius: 0 10px 0 0;
+}
+
+.ocr-master-category-select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.ocr-master-category-select option {
+    background: #fff;
+    color: #333;
+    font-size: 13px;
+    font-weight: normal;
+    text-transform: none;
+}
+
+.ocr-master-category-select:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.ocr-th-num {
+    text-align: right;
+    min-width: 70px;
+}
+
+.ocr-th-category {
+    min-width: 140px;
+    padding: 4px 8px !important;
+}
+
+.ocr-th-action {
+    width: 36px;
+}
+
+/* --- OCR Totals Card --- */
+.ocr-totals-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.ocr-totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: var(--text-mid);
+}
+
+.ocr-totals-label {
+    font-weight: 500;
+}
+
+.ocr-totals-val {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.ocr-totals-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.currency-prefix {
+    font-weight: 500;
+    color: var(--text-mid);
+}
+
+.ocr-totals-input {
+    width: 72px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    background: var(--bg-hover);
+    color: var(--text-dark);
+    text-align: right;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.ocr-totals-input:focus {
+    border-color: var(--primary);
+}
+
+.ocr-grand-total-wrap {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    margin-left: -8px;
+    margin-right: -8px;
+    margin-bottom: -8px;
+}
+
+.ocr-grand-total-label {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.ocr-grand-total-val {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.ocr-table-row {
+    transition: background var(--transition-fast);
+}
+
+.ocr-table-row:hover {
+    background: rgba(177, 204, 161, 0.08);
+}
+
+.ocr-table-row td {
+    padding: 6px 6px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+}
+
+.ocr-cell-input {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: var(--font-family);
+    font-size: 13px;
+    color: var(--text-dark);
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.ocr-cell-input:focus {
+    outline: none;
+    border-color: var(--blue-link);
+    background: rgba(98, 170, 223, 0.06);
+}
+
+.ocr-cell-input.num {
+    text-align: right;
+    width: 80px;
+}
+
+.ocr-cell-num {
+    text-align: right;
+}
+
+.ocr-cell-select {
+    width: 100%;
+    border: 1px solid var(--border-light);
+    background: var(--bg-white);
+    border-radius: 6px;
+    padding: 6px 4px;
+    font-family: var(--font-family);
+    font-size: 12px;
+    color: var(--text-dark);
+    cursor: pointer;
+    min-width: 100px;
+}
+
+.ocr-cell-select:focus {
+    outline: none;
+    border-color: var(--blue-link);
+}
+
+.ocr-cell-action {
+    text-align: center;
+}
+
+.ocr-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(253, 60, 74, 0.08);
+    color: var(--red-danger);
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background var(--transition-fast), transform var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ocr-remove-btn:hover {
+    background: rgba(253, 60, 74, 0.18);
+    transform: scale(1.1);
+}
+
+.ocr-total-row td {
+    padding: 12px 8px;
+    border-top: 2px solid var(--green-primary);
+    font-size: 14px;
+    color: var(--text-dark);
+}
+
+.ocr-date-row {
+    margin-top: 16px;
+    padding: 12px 0;
+}
+
+.ocr-action-btns {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.ocr-action-btns .submit-btn {
+    flex: 1;
+    font-size: 14px;
+    padding: 14px;
+}
+
+.ocr-clear-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px;
+    background: none;
+    border: 1px dashed var(--border-light);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-family);
+    font-size: 12px;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ocr-clear-btn:hover {
+    color: var(--red-danger);
+    border-color: var(--red-danger);
+}
 
 /* ============================================================
    SPLIT EXPENSE
@@ -3035,7 +3343,24 @@ select.form-input {
     color: var(--green-dark);
 }
 
-/* Dark mode adjustments for Split */
+/* Dark mode adjustments for OCR & Split */
+body.dark-mode .ocr-table thead th {
+    background: linear-gradient(135deg, #2a3d28, #1e2e1c);
+}
+
+body.dark-mode .ocr-cell-input {
+    color: var(--text-dark);
+}
+
+body.dark-mode .ocr-cell-input:focus {
+    background: rgba(98, 170, 223, 0.1);
+}
+
+body.dark-mode .ocr-cell-select {
+    background: var(--bg-card);
+    color: var(--text-dark);
+}
+
 body.dark-mode .split-assign-chip.active {
     background: linear-gradient(135deg, #2a5a30, #1e4528);
 }
@@ -3315,6 +3640,187 @@ body.dark-mode .loading-overlay {
 .refresh-btn:hover {
     background: #cddbff !important;
     transform: translateY(-1px);
+}
+
+/* ---- OCR & SPLIT SCREENS ---- */
+.ocr-results-container {
+    padding: 0 0 24px;
+    animation: fadeUp 0.5s ease;
+}
+
+.ocr-merchant-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--bg-light);
+    border-radius: 12px;
+}
+
+.ocr-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ocr-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.ocr-table th {
+    text-align: left;
+    padding: 14px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.ocr-cell {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.ocr-cell-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-white);
+    transition: border-color 0.2s;
+}
+
+.ocr-cell-input:focus {
+    border-color: var(--green-accent);
+    outline: none;
+}
+
+.ocr-cell-input.num {
+    text-align: right;
+    font-weight: 600;
+}
+
+.ocr-cell-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.ocr-remove-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(253, 60, 74, 0.1);
+    border: none;
+    color: var(--red-danger);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.ocr-totals-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.ocr-totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.ocr-totals-label {
+    font-size: 14px;
+    color: var(--text-mid);
+    font-weight: 500;
+}
+
+.currency-prefix {
+    font-size: 14px;
+    color: var(--text-mid);
+    font-weight: 600;
+}
+
+.ocr-totals-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-white);
+    border: 1px solid var(--border-light);
+    padding: 0 10px;
+    border-radius: 12px;
+}
+
+.ocr-totals-input {
+    border: none;
+    background: none;
+    padding: 10px 0;
+    width: 80px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 15px;
+    outline: none;
+}
+
+.ocr-grand-total-wrap {
+    margin: 16px -20px -20px;
+    padding: 20px;
+    background: var(--green-accent);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.ocr-grand-total-label {
+    font-size: 16px;
+    font-weight: 700;
+    opacity: 0.9;
+}
+
+.ocr-grand-total-val {
+    font-size: 26px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ocr-clear-btn {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-mid);
+    padding: 14px;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 40px;
 }
 
 /* ---- SPLIT EXPENSE ---- */
